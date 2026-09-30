@@ -1,0 +1,479 @@
+import reflex as rx
+import requests
+
+API_BASE = "http://localhost:8000"
+OFFICEBASICS_PORTAL_URL = "https://supplies.officebasics.com/"
+
+
+def _error_detail(response: requests.Response, fallback: str) -> str:
+    """Shared error-message extraction used by every upload handler below."""
+    try:
+        return response.json().get("detail", fallback)
+    except ValueError:
+        return fallback
+
+
+class InventoryState(rx.State):
+    # catalog upload
+    catalog_status: str = ""
+    catalog_loaded_count: int = 0
+    catalog_error: str = ""
+    is_uploading_catalog: bool = False
+
+    # comparison
+    is_comparing: bool = False
+    compare_error: str = ""
+    comparison_id: str = ""
+    competitor_product: str = ""
+    competitor_price: str = ""
+    matched_category: str = ""
+    match_source: str = ""
+    tiers: list[dict] = []
+    download_url: str = ""
+    manual_lookup_note: str = ""
+    manual_lookup_url: str = ""
+
+    # feedback / confirmation
+    good_sku_override: str = ""
+    better_sku_override: str = ""
+    best_sku_override: str = ""
+    is_confirming: bool = False
+    confirm_status: str = ""
+
+    # spend analysis
+    is_analyzing_spend: bool = False
+    spend_error: str = ""
+    spend_total_current: str = ""
+    spend_total_recommended: str = ""
+    spend_total_savings: str = ""
+    spend_savings_pct: str = ""
+    spend_rows_analyzed: str = ""
+    spend_rows_unmatched: str = ""
+    spend_workbook_url: str = ""
+    spend_summary_url: str = ""
+    spend_manual_lookup_note: str = ""
+
+    async def handle_catalog_upload(self, files: list[rx.UploadFile]):
+        if not files:
+            return
+        self.is_uploading_catalog = True
+        self.catalog_error = ""
+        upload_file = files[0]
+        file_bytes = await upload_file.read()
+
+        try:
+            response = requests.post(
+                f"{API_BASE}/catalog/upload/",
+                files={"file": (upload_file.filename, file_bytes, upload_file.content_type)},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                self.catalog_loaded_count = data.get("loaded_items", 0)
+                self.catalog_status = (
+                    f"Loaded {self.catalog_loaded_count} SKUs across "
+                    f"{len(data.get('categories', []))} categories."
+                )
+            else:
+                self.catalog_error = _error_detail(response, "Failed to load catalog")
+        except Exception as e:
+            self.catalog_error = f"Connection failed: {str(e)}"
+        finally:
+            self.is_uploading_catalog = False
+
+    async def handle_compare(self, files: list[rx.UploadFile]):
+        if not files:
+            return
+        self.is_comparing = True
+        self.compare_error = ""
+        self.download_url = ""
+        upload_file = files[0]
+        file_bytes = await upload_file.read()
+
+        try:
+            response = requests.post(
+                f"{API_BASE}/compare/download/",
+                files={"file": (upload_file.filename, file_bytes, upload_file.content_type)},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                comparison = data["comparison"]
+                self.comparison_id = comparison.get("comparison_id", "")
+                self.competitor_product = comparison.get("competitor_product", "")
+                price = comparison.get("competitor_price")
+                self.competitor_price = f"${price:,.2f}" if price else "Not detected"
+                self.matched_category = comparison.get("matched_category", "") or ""
+                self.match_source = (
+                    "Learned from a confirmed match"
+                    if comparison.get("source") == "learned"
+                    else "Algorithmic match"
+                )
+
+                tier_rows = []
+                for tier_name in ["good", "better", "best"]:
+                    item = comparison.get("tiers", {}).get(tier_name)
+                    if item:
+                        tier_rows.append(
+                            {
+                                "tier": tier_name.upper(),
+                                "name": item["name"],
+                                "sku": item["sku"],
+                                "price": f"${item['price']:,.2f}",
+                            }
+                        )
+                self.tiers = tier_rows
+                self.download_url = f"{API_BASE}{data['download_url']}"
+                self.confirm_status = ""
+
+                manual_lookup = comparison.get("manual_lookup")
+                self.manual_lookup_note = manual_lookup["note"] if manual_lookup else ""
+                self.manual_lookup_url = manual_lookup["portal_url"] if manual_lookup else ""
+            else:
+                self.compare_error = _error_detail(response, "Comparison failed")
+        except Exception as e:
+            self.compare_error = f"Connection failed: {str(e)}"
+        finally:
+            self.is_comparing = False
+
+    async def handle_confirm(self):
+        if not self.comparison_id:
+            return
+        self.is_confirming = True
+        self.confirm_status = ""
+        payload = {"comparison_id": self.comparison_id}
+        if self.good_sku_override.strip():
+            payload["good_sku"] = self.good_sku_override.strip()
+        if self.better_sku_override.strip():
+            payload["better_sku"] = self.better_sku_override.strip()
+        if self.best_sku_override.strip():
+            payload["best_sku"] = self.best_sku_override.strip()
+
+        try:
+            response = requests.post(f"{API_BASE}/feedback/confirm/", json=payload)
+            if response.status_code == 200:
+                self.confirm_status = "Saved — future similar products will use this match."
+            else:
+                self.confirm_status = _error_detail(response, "Could not save feedback")
+        except Exception as e:
+            self.confirm_status = f"Connection failed: {str(e)}"
+        finally:
+            self.is_confirming = False
+
+    async def handle_spend_analysis(self, files: list[rx.UploadFile]):
+        if not files:
+            return
+        self.is_analyzing_spend = True
+        self.spend_error = ""
+        upload_file = files[0]
+        file_bytes = await upload_file.read()
+
+        try:
+            response = requests.post(
+                f"{API_BASE}/analysis/spend/",
+                files={"file": (upload_file.filename, file_bytes, upload_file.content_type)},
+                data={"recommended_tier": "best"},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                summary = data["summary"]
+                self.spend_total_current = f"${summary['total_current_spend']:,.2f}"
+                self.spend_total_recommended = f"${summary['total_recommended_spend']:,.2f}"
+                self.spend_total_savings = f"${summary['total_savings']:,.2f}"
+                self.spend_savings_pct = f"{summary['savings_pct']:.1f}%"
+                self.spend_rows_analyzed = str(summary["rows_analyzed"])
+                self.spend_rows_unmatched = str(summary["rows_unmatched"])
+                self.spend_workbook_url = f"{API_BASE}{data['workbook_url']}"
+                self.spend_summary_url = f"{API_BASE}{data['executive_summary_url']}"
+                self.spend_manual_lookup_note = summary.get("manual_lookup_note") or ""
+            else:
+                self.spend_error = _error_detail(response, "Spend analysis failed")
+        except Exception as e:
+            self.spend_error = f"Connection failed: {str(e)}"
+        finally:
+            self.is_analyzing_spend = False
+
+
+def tier_card(item: dict) -> rx.Component:
+    return rx.box(
+        rx.hstack(
+            rx.badge(item["tier"], color_scheme="blue"),
+            rx.vstack(
+                rx.text(item["name"], font_weight="bold"),
+                rx.text(f"SKU: {item['sku']}", font_size="0.85em", color="gray"),
+                align_items="start",
+                spacing="0",
+            ),
+            rx.spacer(),
+            rx.text(item["price"], font_weight="bold", font_size="1.1em"),
+            width="100%",
+        ),
+        border="1px solid #E2E8F0",
+        border_radius="8px",
+        padding="0.8em",
+        margin_y="0.4em",
+        width="100%",
+    )
+
+
+def index() -> rx.Component:
+    return rx.container(
+        rx.vstack(
+            rx.heading("Office Basics Good / Better / Best Comparison", size="7"),
+
+            # --- Step 1: Load Office Basics catalog ---
+            rx.divider(margin_y="0.5em"),
+            rx.text("1. Upload your Office Basics SKU/cost export", font_weight="bold"),
+            rx.text(
+                "Columns required: sku, name, description, category, tier (good/better/best), price",
+                font_size="0.8em",
+                color="gray",
+            ),
+            rx.upload(
+                rx.vstack(
+                    rx.button("Select Catalog File", color_scheme="blue", size="2"),
+                    rx.text("Supports: .xlsx, .xls, .csv", font_size="0.8em", color="gray"),
+                ),
+                id="catalog_upload",
+                border="2px dashed #CBD5E0",
+                padding="1.5em",
+                border_radius="10px",
+                width="100%",
+            ),
+            rx.button(
+                "Load Catalog",
+                on_click=InventoryState.handle_catalog_upload(
+                    rx.upload_files(upload_id="catalog_upload")
+                ),
+                is_loading=InventoryState.is_uploading_catalog,
+                color_scheme="gray",
+                width="100%",
+            ),
+            rx.cond(
+                InventoryState.catalog_status != "",
+                rx.text(InventoryState.catalog_status, color="green", custom_attrs={"aria-live": "polite"}),
+            ),
+            rx.cond(
+                InventoryState.catalog_error != "",
+                rx.text(InventoryState.catalog_error, color="red", custom_attrs={"aria-live": "assertive"}),
+            ),
+
+            # --- Step 2: Upload competitor product ---
+            rx.divider(margin_y="1em"),
+            rx.text("2. Upload the current (competitor) product", font_weight="bold"),
+            rx.text(
+                "Photo, PDF, or Excel — price and product info are extracted automatically",
+                font_size="0.8em",
+                color="gray",
+            ),
+            rx.upload(
+                rx.vstack(
+                    rx.button("Select Product File", color_scheme="green", size="2"),
+                    rx.text("Supports: .png, .jpg, .pdf, .xlsx", font_size="0.8em", color="gray"),
+                ),
+                id="compare_upload",
+                border="2px dashed #CBD5E0",
+                padding="1.5em",
+                border_radius="10px",
+                width="100%",
+            ),
+            rx.button(
+                "Run Cost Comparison",
+                on_click=InventoryState.handle_compare(
+                    rx.upload_files(upload_id="compare_upload")
+                ),
+                is_loading=InventoryState.is_comparing,
+                color_scheme="green",
+                width="100%",
+            ),
+            rx.cond(
+                InventoryState.compare_error != "",
+                rx.text(InventoryState.compare_error, color="red", custom_attrs={"aria-live": "assertive"}),
+            ),
+
+            # --- Results ---
+            rx.cond(
+                InventoryState.competitor_product != "",
+                rx.vstack(
+                    rx.divider(margin_y="1em"),
+                    rx.text(f"Current product: {InventoryState.competitor_product}", font_weight="bold"),
+                    rx.text(f"Detected price: {InventoryState.competitor_price}"),
+                    rx.text(f"Matched category: {InventoryState.matched_category}", color="gray"),
+                    rx.badge(InventoryState.match_source, color_scheme="purple"),
+                    rx.foreach(InventoryState.tiers, tier_card),
+                    rx.cond(
+                        InventoryState.manual_lookup_note != "",
+                        rx.box(
+                            rx.text(InventoryState.manual_lookup_note, font_size="0.85em"),
+                            rx.link(
+                                "Open supplies.officebasics.com",
+                                href=InventoryState.manual_lookup_url,
+                                is_external=True,
+                                font_size="0.85em",
+                            ),
+                            border="1px solid #F0C36D",
+                            background="#FFF8E6",
+                            border_radius="8px",
+                            padding="0.6em",
+                            width="100%",
+                        ),
+                    ),
+                    rx.cond(
+                        InventoryState.download_url != "",
+                        rx.link(
+                            rx.button("Download Cost Comparison (.xlsx)", color_scheme="blue"),
+                            href=InventoryState.download_url,
+                            is_external=True,
+                        ),
+                    ),
+
+                    # --- Confirm / correct the recommendation ---
+                    rx.divider(margin_y="1em"),
+                    rx.text(
+                        "Was this the right call? Correct any tier below and confirm "
+                        "so similar products are matched this way next time.",
+                        font_size="0.85em",
+                        color="gray",
+                    ),
+                    rx.input(
+                        placeholder="Good SKU override (optional)",
+                        value=InventoryState.good_sku_override,
+                        on_change=InventoryState.set_good_sku_override,
+                        width="100%",
+                    ),
+                    rx.input(
+                        placeholder="Better SKU override (optional)",
+                        value=InventoryState.better_sku_override,
+                        on_change=InventoryState.set_better_sku_override,
+                        width="100%",
+                    ),
+                    rx.input(
+                        placeholder="Best SKU override (optional)",
+                        value=InventoryState.best_sku_override,
+                        on_change=InventoryState.set_best_sku_override,
+                        width="100%",
+                    ),
+                    rx.button(
+                        "Confirm This Match",
+                        on_click=InventoryState.handle_confirm,
+                        is_loading=InventoryState.is_confirming,
+                        color_scheme="purple",
+                        width="100%",
+                    ),
+                    rx.cond(
+                        InventoryState.confirm_status != "",
+                        rx.text(InventoryState.confirm_status, color="green", custom_attrs={"aria-live": "polite"}),
+                    ),
+                    width="100%",
+                    custom_attrs={"aria-live": "polite"},
+                ),
+            ),
+
+            # --- Step 3: Multi-month / multi-location spend analysis ---
+            rx.divider(margin_y="1em"),
+            rx.text("3. Usage analysis & executive summary (optional)", font_weight="bold"),
+            rx.text(
+                "Upload historical spend data (date, location, product, quantity, unit_price or "
+                "total_price) to see how much Office Basics equivalents would have saved.",
+                font_size="0.8em",
+                color="gray",
+            ),
+            rx.upload(
+                rx.vstack(
+                    rx.button("Select Spend History File", color_scheme="purple", size="2"),
+                    rx.text("Supports: .csv, .xlsx", font_size="0.8em", color="gray"),
+                ),
+                id="spend_upload",
+                border="2px dashed #CBD5E0",
+                padding="1.5em",
+                border_radius="10px",
+                width="100%",
+            ),
+            rx.button(
+                "Generate Usage Analysis",
+                on_click=InventoryState.handle_spend_analysis(
+                    rx.upload_files(upload_id="spend_upload")
+                ),
+                is_loading=InventoryState.is_analyzing_spend,
+                color_scheme="purple",
+                width="100%",
+            ),
+            rx.cond(
+                InventoryState.spend_error != "",
+                rx.text(InventoryState.spend_error, color="red", custom_attrs={"aria-live": "assertive"}),
+            ),
+            rx.cond(
+                InventoryState.spend_workbook_url != "",
+                rx.vstack(
+                    rx.divider(margin_y="0.5em"),
+                    rx.hstack(
+                        rx.vstack(
+                            rx.text("Current Spend", font_size="0.8em", color="gray"),
+                            rx.text(InventoryState.spend_total_current, font_weight="bold"),
+                            align_items="start",
+                        ),
+                        rx.spacer(),
+                        rx.vstack(
+                            rx.text("Recommended Spend", font_size="0.8em", color="gray"),
+                            rx.text(InventoryState.spend_total_recommended, font_weight="bold"),
+                            align_items="start",
+                        ),
+                        rx.spacer(),
+                        rx.vstack(
+                            rx.text("Savings", font_size="0.8em", color="gray"),
+                            rx.text(
+                                f"{InventoryState.spend_total_savings} ({InventoryState.spend_savings_pct})",
+                                font_weight="bold",
+                                color="green",
+                            ),
+                            align_items="start",
+                        ),
+                        width="100%",
+                    ),
+                    rx.text(
+                        f"{InventoryState.spend_rows_analyzed} records analyzed, "
+                        f"{InventoryState.spend_rows_unmatched} unmatched",
+                        font_size="0.8em",
+                        color="gray",
+                    ),
+                    rx.cond(
+                        InventoryState.spend_manual_lookup_note != "",
+                        rx.box(
+                            rx.text(InventoryState.spend_manual_lookup_note, font_size="0.85em"),
+                            rx.link(
+                                "Open supplies.officebasics.com",
+                                href=OFFICEBASICS_PORTAL_URL,
+                                is_external=True,
+                                font_size="0.85em",
+                            ),
+                            border="1px solid #F0C36D",
+                            background="#FFF8E6",
+                            border_radius="8px",
+                            padding="0.6em",
+                            width="100%",
+                        ),
+                    ),
+                    rx.link(
+                        rx.button("Download Usage Analysis Workbook (.xlsx)", color_scheme="blue"),
+                        href=InventoryState.spend_workbook_url,
+                        is_external=True,
+                        width="100%",
+                    ),
+                    rx.link(
+                        rx.button("Download Executive Summary (.docx)", color_scheme="blue"),
+                        href=InventoryState.spend_summary_url,
+                        is_external=True,
+                        width="100%",
+                    ),
+                    width="100%",
+                    custom_attrs={"aria-live": "polite"},
+                ),
+            ),
+            align="center",
+            spacing="3",
+        ),
+        padding="2em",
+        max_width="700px",
+    )
+
+
+app = rx.App()
+app.add_page(index)
