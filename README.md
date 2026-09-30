@@ -14,21 +14,46 @@ Because a case of c-fold towels, multifold towels, and roll towels all contain
 different unit counts, price alone isn't a fair comparison — the report
 normalizes to **cost per use** whenever `uses_per_case` is available.
 
-## Setup
+## Project layout
+- `backend.py` — FastAPI backend (CLIP + FAISS matching, OCR, report generation).
+  Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`).
+- `frontend/` — static HTML/JS frontend. Deployed to **Cloudflare** as static
+  assets (`wrangler.jsonc`). It calls the backend at the URL in `frontend/config.js`.
+
+## Deploy
+### 1. Backend on Render
+1. In Render, choose **New → Blueprint** and select this repo. Render reads
+   `render.yaml` and builds the `Dockerfile` (Tesseract and the CLIP model are
+   baked into the image).
+2. The service needs the **Standard** plan or above — torch + CLIP need ~1.5–2 GB
+   RAM and will run out of memory on free/starter instances.
+3. A 1 GB persistent disk is mounted at `/var/data` (`DATA_DIR`) so learned
+   feedback and generated reports survive restarts/redeploys.
+4. Once it's live, note its URL (e.g. `https://cost-comparison-backend.onrender.com`)
+   and check `https://<that-url>/health` returns `{"status": "ok"}`.
+
+### 2. Frontend on Cloudflare
+1. Put the Render URL in `frontend/config.js` (`window.API_BASE = "..."`) and push.
+2. Cloudflare's deploy command stays `npx wrangler deploy`; no build command is
+   needed. `wrangler.jsonc` points it at `./frontend`. Make sure `"name"` in
+   `wrangler.jsonc` matches your Cloudflare Worker's name.
+3. Optionally lock CORS down: in Render set `ALLOWED_ORIGINS` to your Cloudflare
+   URL (comma-separate multiple origins) instead of `*`.
+
+## Run locally
 ```
 pip install -r requirements.txt
+uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
 ```
 OCR (for reading prices off photos/scanned PDFs) needs the Tesseract binary:
 - Mac: `brew install tesseract`
 - Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
 - Windows: https://github.com/UB-Mannheim/tesseract/wiki
 
-## Run
-```
-uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
-reflex init
-reflex run
-```
+Or run the same container Render uses: `docker build -t ob-backend . && docker run -p 8000:8000 ob-backend`.
+
+Then serve the frontend (with `window.API_BASE = "http://localhost:8000"` in
+`frontend/config.js`): `npx wrangler dev` or `python -m http.server -d frontend 8080`.
 
 ## Catalog format
 Upload via the app or `POST /catalog/upload/`. Required columns:
@@ -98,7 +123,8 @@ directly instead of recomputing from scratch. `GET /feedback/list/` shows
 everything learned so far.
 
 **Current limitation:** confirmed feedback is stored as JSON on local disk
-(`/tmp/ob_reports/feedback_store.json`) and pending (unconfirmed) comparisons
+(`$DATA_DIR/ob_reports/feedback_store.json`, the Render persistent disk in
+production) and pending (unconfirmed) comparisons
 live in memory only — restarting the backend clears anything not yet
 confirmed. For production use, swap this for a real database (e.g. Postgres
 with pgvector) so the learned mappings and pending comparisons survive

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: cost-comparison-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # CLIP + torch need ~1.5-2 GB RAM; the free/starter plans will run out of memory
+    plan: standard
+    healthCheckPath: /health
+    envVars:
+      # Set to your Cloudflare frontend URL once it's deployed, e.g.
+      # https://cost-comparison-tool.<your-subdomain>.workers.dev
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: ob-data
+      mountPath: /var/data
+      sizeGB: 1

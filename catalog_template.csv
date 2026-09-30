@@ -1,0 +1,4 @@
+sku,name,description,category,tier,price,format,uses_per_case
+OB-TWL-CFOLD-01,Office Basics C-Fold Towel,White c-fold paper hand towel 2400 sheets per case,hand towel,good,32.50,c-fold,1200
+OB-TWL-MFOLD-01,Office Basics Multifold Towel,White multifold paper hand towel 4000 sheets per case,hand towel,better,34.00,multifold,2000
+OB-TWL-ROLL-01,Office Basics Hardwound Roll Towel,White hardwound roll towel 6 rolls x 800 ft per case,hand towel,best,41.00,roll,4800

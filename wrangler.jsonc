@@ -1,0 +1,9 @@
+// Cloudflare deploys only the static frontend; the Python backend runs on Render.
+// "name" must match the Worker/project name in your Cloudflare dashboard.
+{
+  "name": "cost-comparison-tool",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./frontend"
+  }
+}
