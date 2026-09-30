@@ -15,6 +15,7 @@ import pdfplumber
 import torch
 from docx import Document
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -32,7 +33,9 @@ except ImportError:
 
 VALID_TIERS = {"good", "better", "best"}
 OFFICEBASICS_PORTAL_URL = "https://supplies.officebasics.com/"
-REPORTS_DIR = os.path.join(tempfile.gettempdir(), "ob_reports")
+# DATA_DIR lets a host (e.g. a Render persistent disk) keep reports and learned
+# feedback across restarts; defaults to the system temp dir for local runs.
+REPORTS_DIR = os.path.join(os.environ.get("DATA_DIR", tempfile.gettempdir()), "ob_reports")
 os.makedirs(REPORTS_DIR, exist_ok=True)
 FEEDBACK_PATH = os.path.join(REPORTS_DIR, "feedback_store.json")
 FEEDBACK_SIMILARITY_THRESHOLD = 0.88  # cosine sim (CLIP embeddings are L2-normalized)
@@ -237,6 +240,17 @@ def style_header_row(ws, row: int, ncols: int):
 # 4. API + shared engine/store
 # ==========================================
 app = FastAPI(title="Office Basics Good/Better/Best Comparison Engine")
+
+# The frontend is served from a different origin (Cloudflare), so the browser
+# needs CORS. ALLOWED_ORIGINS is a comma-separated list, e.g.
+# "https://cost-comparison-tool.example.workers.dev"; "*" allows any origin.
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/reports", StaticFiles(directory=REPORTS_DIR), name="reports")
 engine = CLIPSearchEngine()
 feedback_store = FeedbackStore(engine)
@@ -393,6 +407,11 @@ async def upload_catalog(file: UploadFile = File(...)):
         "skipped_rows": skipped,
         "categories": sorted({i["category"] for i in items}),
     }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 @app.get("/catalog/status/")

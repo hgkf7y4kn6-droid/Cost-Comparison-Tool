@@ -1,0 +1,108 @@
+:root {
+  --text: #1a202c;
+  --muted: #718096;
+  --border: #e2e8f0;
+  --bg: #ffffff;
+  --ok: #2f855a;
+  --err: #c53030;
+  --blue: #2b6cb0;
+  --green: #2f855a;
+  --purple: #6b46c1;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.45;
+}
+
+main { max-width: 700px; margin: 0 auto; padding: 2em 16px; }
+h1 { font-size: 1.6em; text-align: center; }
+h2 { font-size: 1em; margin-bottom: 0.2em; }
+section { border-top: 1px solid var(--border); padding: 1em 0; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 1em 0; }
+
+.hint { font-size: 0.8em; color: var(--muted); margin-top: 0; }
+.muted { color: var(--muted); }
+.good { color: var(--ok); }
+
+form { display: flex; flex-direction: column; gap: 0.5em; }
+input[type="file"] {
+  border: 2px dashed #cbd5e0;
+  border-radius: 10px;
+  padding: 1.2em;
+  width: 100%;
+}
+input[type="text"], input[type="number"], select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5em 0.6em;
+  font: inherit;
+  width: 100%;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.6em 1em;
+  margin: 0.4em 0;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.6; cursor: progress; }
+.btn.blue { background: var(--blue); }
+.btn.green { background: var(--green); }
+.btn.purple { background: var(--purple); }
+
+.status:empty { display: none; }
+.status.ok { color: var(--ok); }
+.status.err { color: var(--err); }
+
+.badge {
+  display: inline-block;
+  background: #e9d8fd;
+  color: #44337a;
+  border-radius: 4px;
+  padding: 0.1em 0.5em;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
+.tier {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8em;
+  margin: 0.4em 0;
+}
+.tier .badge { background: #bee3f8; color: #2a4365; }
+.tier .info { flex: 1; min-width: 0; }
+.tier .sku { font-size: 0.85em; color: var(--muted); }
+.tier .price { font-weight: 700; font-size: 1.1em; }
+
+.notice {
+  border: 1px solid #f0c36d;
+  background: #fff8e6;
+  border-radius: 8px;
+  padding: 0.6em;
+  font-size: 0.85em;
+  margin: 0.5em 0;
+}
+.notice p { margin: 0 0 0.3em; }
+
+.stats { display: flex; flex-wrap: wrap; gap: 1em; justify-content: space-between; }
+.stats div { display: flex; flex-direction: column; }
+.stats span { font-size: 0.8em; }

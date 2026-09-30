@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Office Basics Comparison</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <h1>Office Basics Good / Better / Best Comparison</h1>
+
+    <!-- Step 1: catalog -->
+    <section>
+      <h2>1. Upload your Office Basics SKU/cost export</h2>
+      <p class="hint">Columns required: sku, name, description, category, tier (good/better/best), price</p>
+      <form id="catalog-form">
+        <input type="file" id="catalog-file" accept=".xlsx,.xls,.csv" required>
+        <button type="submit" class="btn blue">Load Catalog</button>
+      </form>
+      <p id="catalog-status" class="status ok" aria-live="polite"></p>
+      <p id="catalog-error" class="status err" aria-live="assertive"></p>
+    </section>
+
+    <!-- Step 2: competitor product -->
+    <section>
+      <h2>2. Upload the current (competitor) product</h2>
+      <p class="hint">Photo, PDF, or Excel — price and product info are extracted automatically</p>
+      <form id="compare-form">
+        <input type="file" id="compare-file" accept=".png,.jpg,.jpeg,.webp,.pdf,.xlsx,.xls" required>
+        <input type="number" id="competitor-uses" min="0" step="any"
+               placeholder="Competitor uses per case (optional, enables cost-per-use)">
+        <button type="submit" class="btn green">Run Cost Comparison</button>
+      </form>
+      <p id="compare-error" class="status err" aria-live="assertive"></p>
+
+      <div id="compare-results" hidden aria-live="polite">
+        <p><strong>Current product:</strong> <span id="competitor-product"></span></p>
+        <p>Detected price: <span id="competitor-price"></span></p>
+        <p class="muted">Matched category: <span id="matched-category"></span></p>
+        <span id="match-source" class="badge"></span>
+        <div id="tiers"></div>
+        <div id="manual-lookup" class="notice" hidden>
+          <p id="manual-lookup-note"></p>
+          <a id="manual-lookup-link" target="_blank" rel="noopener">Open supplies.officebasics.com</a>
+        </div>
+        <a id="download-link" class="btn blue" target="_blank" rel="noopener" hidden>Download Cost Comparison (.xlsx)</a>
+
+        <hr>
+        <p class="hint">Was this the right call? Correct any tier below and confirm so similar products are matched this way next time.</p>
+        <form id="confirm-form">
+          <input type="text" id="good-sku" placeholder="Good SKU override (optional)">
+          <input type="text" id="better-sku" placeholder="Better SKU override (optional)">
+          <input type="text" id="best-sku" placeholder="Best SKU override (optional)">
+          <button type="submit" class="btn purple">Confirm This Match</button>
+        </form>
+        <p id="confirm-status" class="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- Step 3: spend analysis -->
+    <section>
+      <h2>3. Usage analysis &amp; executive summary (optional)</h2>
+      <p class="hint">Upload historical spend data (date, location, product, quantity, unit_price or total_price) to see how much Office Basics equivalents would have saved.</p>
+      <form id="spend-form">
+        <input type="file" id="spend-file" accept=".csv,.xlsx,.xls" required>
+        <select id="spend-tier" aria-label="Recommended tier">
+          <option value="best" selected>Recommend BEST tier</option>
+          <option value="better">Recommend BETTER tier</option>
+          <option value="good">Recommend GOOD tier</option>
+        </select>
+        <button type="submit" class="btn purple">Generate Usage Analysis</button>
+      </form>
+      <p id="spend-error" class="status err" aria-live="assertive"></p>
+
+      <div id="spend-results" hidden aria-live="polite">
+        <div class="stats">
+          <div><span class="muted">Current Spend</span><strong id="spend-current"></strong></div>
+          <div><span class="muted">Recommended Spend</span><strong id="spend-recommended"></strong></div>
+          <div><span class="muted">Savings</span><strong id="spend-savings" class="good"></strong></div>
+        </div>
+        <p class="hint" id="spend-rows"></p>
+        <div id="spend-manual-lookup" class="notice" hidden>
+          <p id="spend-manual-lookup-note"></p>
+          <a href="https://supplies.officebasics.com/" target="_blank" rel="noopener">Open supplies.officebasics.com</a>
+        </div>
+        <a id="spend-workbook-link" class="btn blue" target="_blank" rel="noopener">Download Usage Analysis Workbook (.xlsx)</a>
+        <a id="spend-summary-link" class="btn blue" target="_blank" rel="noopener">Download Executive Summary (.docx)</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
