@@ -409,6 +409,17 @@ async def upload_catalog(file: UploadFile = File(...)):
     }
 
 
+@app.get("/")
+async def root():
+    # This is an API only; the UI is the separately hosted frontend.
+    return {
+        "service": "Office Basics Comparison API",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
