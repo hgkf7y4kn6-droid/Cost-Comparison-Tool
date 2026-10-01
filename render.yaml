@@ -13,6 +13,15 @@ services:
         value: "*"
       - key: DATA_DIR
         value: /var/data
+      # Clerk "Frontend API URL" (Clerk dashboard -> API keys), e.g.
+      # https://your-app.clerk.accounts.dev. Required: the API rejects all
+      # requests until it's set.
+      - key: CLERK_ISSUER
+        sync: false
+      # Optional: comma-separated web origins allowed to use the API, e.g.
+      # https://cost-comparison-tool.<your-subdomain>.workers.dev
+      - key: CLERK_AUTHORIZED_PARTIES
+        sync: false
     disk:
       name: ob-data
       mountPath: /var/data

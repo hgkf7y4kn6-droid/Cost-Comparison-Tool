@@ -1,9 +1,18 @@
-// Cloudflare deploys only the static frontend; the Python backend runs on Render.
+// Cloudflare serves the Expo web build; the Python backend runs on Render.
 // "name" must match the Worker/project name in your Cloudflare dashboard.
+// The EXPO_PUBLIC_* values must be set as Cloudflare *build* variables
+// (Worker -> Settings -> Build -> Variables and secrets) so they are
+// inlined into the web bundle by `expo export`.
 {
   "name": "cost-comparison-tool",
   "compatibility_date": "2026-09-01",
+  "build": {
+    "command": "npm ci && npx expo export --platform web",
+    "cwd": "client"
+  },
   "assets": {
-    "directory": "./frontend"
+    "directory": "./client/dist",
+    // expo-router web output is a single-page app
+    "not_found_handling": "single-page-application"
   }
 }

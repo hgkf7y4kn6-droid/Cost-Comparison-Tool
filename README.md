@@ -14,11 +14,37 @@ Because a case of c-fold towels, multifold towels, and roll towels all contain
 different unit counts, price alone isn't a fair comparison — the report
 normalizes to **cost per use** whenever `uses_per_case` is available.
 
-## Project layout
-- `backend.py` — FastAPI backend (CLIP + FAISS matching, OCR, report generation).
-  Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`).
-- `frontend/` — static HTML/JS frontend. Deployed to **Cloudflare** as static
-  assets (`wrangler.jsonc`). It calls the backend at the URL in `frontend/config.js`.
+## Stack
+| Piece | Where | What |
+|---|---|---|
+| `client/` | **Expo** (expo-router, TypeScript) | One app for web, iOS and Android |
+| Web build | **Cloudflare** (`wrangler.jsonc`) | `expo export --platform web`, served as a single-page app |
+| iOS / Android builds | **EAS** (`client/eas.json`) | Cloud builds, store submission, OTA updates |
+| Auth | **Clerk** | Email-code sign-in in the app; the backend verifies Clerk session tokens on every API route |
+| Analytics | **PostHog** | Screen views, sign-ins and each action (catalog upload, comparison, confirm, spend analysis) |
+| `backend.py` | **Render** (`Dockerfile`, `render.yaml`) | FastAPI + CLIP/FAISS matching, OCR, report generation |
+
+The backend can't run on Cloudflare: PyTorch, the CLIP model, FAISS and
+Tesseract need a real container with ~2 GB RAM.
+
+## Set up the services (once)
+### Clerk
+1. Create an application at clerk.com.
+2. **User & authentication → Email**: enable **Email verification code** as a
+   sign-in method, and make email the only required sign-up field (the app's
+   sign-in screen is a passwordless email-code flow that also creates accounts).
+3. From **API keys** note the **Publishable key** (`pk_...`, for the app) and the
+   **Frontend API URL** (e.g. `https://your-app.clerk.accounts.dev`, for the backend).
+4. For production, create a Clerk production instance on your own domain and use
+   its keys instead of the development ones.
+
+### PostHog
+Create a project and note its **Project API key** (`phc_...`) and host
+(`https://us.i.posthog.com` or `https://eu.i.posthog.com`). Leaving the key unset
+disables analytics. Events sent: `signed_in`, `signed_up`, `catalog_uploaded`,
+`comparison_completed` / `comparison_failed`, `match_confirmed`,
+`spend_analysis_completed` / `spend_analysis_failed`, plus `$screen` views. Users
+are identified by Clerk user id with their email as a person property.
 
 ## Deploy
 ### 1. Backend on Render
@@ -27,36 +53,77 @@ normalizes to **cost per use** whenever `uses_per_case` is available.
    baked into the image).
 2. The service needs the **Standard** plan or above — torch + CLIP need ~1.5–2 GB
    RAM and will run out of memory on free/starter instances.
-3. A 1 GB persistent disk is mounted at `/var/data` (`DATA_DIR`) so learned
+3. Set these environment variables on the service:
+   - `CLERK_ISSUER` — the Clerk **Frontend API URL**. Required: until it's set,
+     every API route returns 503 (the server fails closed rather than running
+     unauthenticated).
+   - `CLERK_AUTHORIZED_PARTIES` (optional) — your Cloudflare site's origin, e.g.
+     `https://cost-comparison-tool.<you>.workers.dev`; rejects web sessions
+     issued for any other site.
+   - `ALLOWED_ORIGINS` (optional) — CORS; set to the same origin instead of `*`.
+4. A 1 GB persistent disk is mounted at `/var/data` (`DATA_DIR`) so learned
    feedback and generated reports survive restarts/redeploys.
-4. Once it's live, note its URL (e.g. `https://cost-comparison-backend.onrender.com`)
-   and check `https://<that-url>/health` returns `{"status": "ok"}`.
+5. Check `https://<service-url>/health` returns `{"status": "ok"}`.
 
-### 2. Frontend on Cloudflare
-1. Put the Render URL in `frontend/config.js` (`window.API_BASE = "..."`) and push.
-2. Cloudflare's deploy command stays `npx wrangler deploy`; no build command is
-   needed. `wrangler.jsonc` points it at `./frontend`. Make sure `"name"` in
-   `wrangler.jsonc` matches your Cloudflare Worker's name.
-3. Optionally lock CORS down: in Render set `ALLOWED_ORIGINS` to your Cloudflare
-   URL (comma-separate multiple origins) instead of `*`.
+### 2. Web app on Cloudflare
+1. In the Cloudflare dashboard, open the Worker → **Settings → Build →
+   Variables and secrets** and add these **build** variables:
+   `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, `EXPO_PUBLIC_POSTHOG_KEY`,
+   `EXPO_PUBLIC_POSTHOG_HOST`, and (if it differs from the default)
+   `EXPO_PUBLIC_API_BASE`. They are inlined into the bundle at build time, so
+   changing one needs a redeploy.
+2. Keep the deploy command `npx wrangler deploy` and leave the build command
+   empty: `wrangler.jsonc` runs `npm ci && npx expo export --platform web` in
+   `client/` and uploads `client/dist`. Make sure `"name"` in `wrangler.jsonc`
+   matches your Worker's name.
+
+### 3. iOS / Android with EAS
+Run from `client/` (needs an Expo account; Apple/Google developer accounts for store builds):
+```
+npx eas-cli@latest login
+npx eas-cli@latest init          # links the project and writes its projectId into app.json
+npx eas-cli@latest env:set --name EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY --value pk_... --visibility plaintext \
+  --environment production --environment preview --environment development
+npx eas-cli@latest env:set --name EXPO_PUBLIC_POSTHOG_KEY --value phc_... --visibility plaintext \
+  --environment production --environment preview --environment development
+#   (same for EXPO_PUBLIC_POSTHOG_HOST / EXPO_PUBLIC_API_BASE if they differ from the defaults)
+npx eas-cli@latest build --profile production --platform all
+npx eas-cli@latest submit --profile production --platform ios   # or android
+```
+Profiles in `eas.json`: `development` (dev client for testing native code),
+`preview` (internal distribution builds), `production` (store builds, build
+numbers auto-incremented). Before the first store build, change the placeholder
+`ios.bundleIdentifier` / `android.package` (`com.officebasics.costcomparison`)
+in `client/app.json` if you need a different identifier — they can't be changed
+after the app is published.
 
 ## Run locally
+Backend:
 ```
 pip install -r requirements.txt
-uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
+AUTH_DISABLED=1 uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
 ```
-OCR (for reading prices off photos/scanned PDFs) needs the Tesseract binary:
+`AUTH_DISABLED=1` skips Clerk verification — local development only; to test
+real auth locally set `CLERK_ISSUER` instead. OCR (for reading prices off
+photos/scanned PDFs) needs the Tesseract binary:
 - Mac: `brew install tesseract`
 - Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
 - Windows: https://github.com/UB-Mannheim/tesseract/wiki
 
-Or run the same container Render uses: `docker build -t ob-backend . && docker run -p 8000:8000 ob-backend`.
+Or run the same container Render uses: `docker build -t ob-backend . && docker run -p 8000:8000 -e AUTH_DISABLED=1 ob-backend`.
 
-Then serve the frontend (with `window.API_BASE = "http://localhost:8000"` in
-`frontend/config.js`): `npx wrangler dev` or `python -m http.server -d frontend 8080`.
+App:
+```
+cd client
+cp .env.example .env       # fill in keys; set EXPO_PUBLIC_API_BASE=http://localhost:8000 for a local backend
+npm install
+npx expo start             # press w for web; native modules (camera, secure store) need a dev build
+```
+After changing a `.env` value, restart with `npx expo start --clear` so the new
+value is inlined.
 
 ## Catalog format
-Upload via the app or `POST /catalog/upload/`. Required columns:
+Upload via the app or `POST /catalog/upload/` (all API routes need a Clerk session token as `Authorization: Bearer ...`). Required columns:
 `sku, name, description, category, tier, price`
 Optional columns:
 - `format` — free-text product type (c-fold, multifold, roll, etc.) for your own reference

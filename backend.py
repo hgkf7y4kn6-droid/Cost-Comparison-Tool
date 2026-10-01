@@ -14,8 +14,10 @@ import pandas as pd
 import pdfplumber
 import torch
 from docx import Document
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+import jwt
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -251,7 +253,57 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Report files are fetched by plain links (no auth header), so they stay public
+# but are named with random UUIDs to make the URLs unguessable.
 app.mount("/reports", StaticFiles(directory=REPORTS_DIR), name="reports")
+
+
+# ------------------------------------------
+# Auth: every API route requires a Clerk session token (Authorization: Bearer).
+# CLERK_ISSUER is the Clerk "Frontend API URL", e.g. https://xyz.clerk.accounts.dev
+# CLERK_AUTHORIZED_PARTIES optionally restricts web tokens to these origins.
+# AUTH_DISABLED=1 skips verification - local development only.
+# ------------------------------------------
+CLERK_ISSUER = os.environ.get("CLERK_ISSUER", "").strip().rstrip("/")
+CLERK_AUTHORIZED_PARTIES = {
+    p.strip().rstrip("/") for p in os.environ.get("CLERK_AUTHORIZED_PARTIES", "").split(",") if p.strip()
+}
+AUTH_DISABLED = os.environ.get("AUTH_DISABLED") == "1"
+_jwks_client = jwt.PyJWKClient(f"{CLERK_ISSUER}/.well-known/jwks.json") if CLERK_ISSUER else None
+_bearer = HTTPBearer(auto_error=False)
+
+
+def require_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer)) -> Dict[str, Any]:
+    if AUTH_DISABLED:
+        return {"sub": "local-dev"}
+    if _jwks_client is None:
+        # fail closed: an unconfigured server must not serve the API anonymously
+        raise HTTPException(503, "Server auth is not configured (set CLERK_ISSUER).")
+    if creds is None:
+        raise HTTPException(401, "Sign in required.")
+    try:
+        signing_key = _jwks_client.get_signing_key_from_jwt(creds.credentials).key
+        claims = jwt.decode(
+            creds.credentials,
+            signing_key,
+            algorithms=["RS256"],
+            issuer=CLERK_ISSUER,
+            options={"require": ["exp", "iat", "sub"]},
+            leeway=5,
+        )
+    except jwt.PyJWKClientConnectionError:
+        raise HTTPException(503, "Could not reach Clerk to verify the session.")
+    except (jwt.InvalidTokenError, jwt.PyJWKClientError):
+        raise HTTPException(401, "Invalid or expired session.")
+    # Native app tokens carry no azp; web tokens carry the page's origin.
+    azp = claims.get("azp")
+    if CLERK_AUTHORIZED_PARTIES and azp and azp.rstrip("/") not in CLERK_AUTHORIZED_PARTIES:
+        raise HTTPException(401, "Session was issued for a different site.")
+    return claims
+
+
+AUTH = [Depends(require_user)]
+
 engine = CLIPSearchEngine()
 feedback_store = FeedbackStore(engine)
 
@@ -338,7 +390,7 @@ def manual_lookup_hint(tiers: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 # ==========================================
 # 5. CATALOG UPLOAD
 # ==========================================
-@app.post("/catalog/upload/")
+@app.post("/catalog/upload/", dependencies=AUTH)
 async def upload_catalog(file: UploadFile = File(...)):
     """
     Ingest the Office Basics SKU/price file.
@@ -425,7 +477,7 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/catalog/status/")
+@app.get("/catalog/status/", dependencies=AUTH)
 async def catalog_status():
     return {
         "loaded_items": len(engine.catalog),
@@ -518,7 +570,7 @@ def build_comparison_workbook(comparison: Dict[str, Any]) -> str:
     for i, w in enumerate([34, 14, 45, 12, 12, 22], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
-    filename = f"cost_comparison_{int(datetime.now().timestamp())}.xlsx"
+    filename = f"cost_comparison_{uuid.uuid4().hex}.xlsx"
     wb.save(os.path.join(REPORTS_DIR, filename))
     return filename
 
@@ -575,7 +627,7 @@ async def _run_comparison(
     return result
 
 
-@app.post("/compare/")
+@app.post("/compare/", dependencies=AUTH)
 async def compare_product(
     file: UploadFile = File(...),
     competitor_uses_per_case: Optional[float] = Form(None),
@@ -584,7 +636,7 @@ async def compare_product(
     return await _run_comparison(file, competitor_uses_per_case)
 
 
-@app.post("/compare/download/")
+@app.post("/compare/download/", dependencies=AUTH)
 async def compare_and_download(
     file: UploadFile = File(...),
     competitor_uses_per_case: Optional[float] = Form(None),
@@ -602,7 +654,7 @@ class ConfirmFeedbackRequest(BaseModel):
     best_sku: Optional[str] = None
 
 
-@app.post("/feedback/confirm/")
+@app.post("/feedback/confirm/", dependencies=AUTH)
 async def confirm_feedback(payload: ConfirmFeedbackRequest):
     """
     Records which SKUs actually got used for a given competitor product.
@@ -633,7 +685,7 @@ async def confirm_feedback(payload: ConfirmFeedbackRequest):
     return {"status": "confirmed", "competitor_name": pending["competitor_name"], "tier_skus": final_tier_skus}
 
 
-@app.get("/feedback/list/")
+@app.get("/feedback/list/", dependencies=AUTH)
 async def list_feedback():
     return {
         "count": len(feedback_store.entries),
@@ -929,7 +981,7 @@ def build_spend_analysis_workbook(analysis: Dict[str, Any]) -> str:
     for col_letter, w in zip("ABCDEFGHI", [12, 18, 30, 8, 14, 20, 30, 16, 12]):
         ws5.column_dimensions[col_letter].width = w
 
-    filename = f"spend_analysis_{int(datetime.now().timestamp())}.xlsx"
+    filename = f"spend_analysis_{uuid.uuid4().hex}.xlsx"
     wb.save(os.path.join(REPORTS_DIR, filename))
     return filename
 
@@ -1024,12 +1076,12 @@ def build_executive_summary_docx(analysis: Dict[str, Any]) -> str:
         "greatest."
     )
 
-    filename = f"executive_summary_{int(datetime.now().timestamp())}.docx"
+    filename = f"executive_summary_{uuid.uuid4().hex}.docx"
     doc.save(os.path.join(REPORTS_DIR, filename))
     return filename
 
 
-@app.post("/analysis/spend/")
+@app.post("/analysis/spend/", dependencies=AUTH)
 async def spend_analysis(
     file: UploadFile = File(...),
     recommended_tier: str = Form("best"),

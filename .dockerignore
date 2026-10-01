@@ -1,4 +1,4 @@
 .git
-frontend
+client
 wrangler.jsonc
 *.md

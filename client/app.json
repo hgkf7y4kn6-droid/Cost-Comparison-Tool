@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Office Basics Compare",
+    "slug": "cost-comparison-tool",
+    "scheme": "costcomparison",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.officebasics.costcomparison"
+    },
+    "android": {
+      "package": "com.officebasics.costcomparison",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to photograph competitor products so they can be compared.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ]
+  }
+}

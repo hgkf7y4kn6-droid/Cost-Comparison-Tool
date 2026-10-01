@@ -13,3 +13,4 @@ pytesseract
 faiss-cpu
 torch
 transformers
+pyjwt[crypto]
