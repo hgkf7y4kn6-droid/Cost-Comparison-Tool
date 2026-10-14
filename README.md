@@ -21,7 +21,16 @@ The frontend is organized as a sales-cycle system, one tab per stage:
    - Sourcing playbook checklist (PA Open Data, OpenDataPhilly, Open Data NJ,
      geo-fenced local scrapers, chamber directories, Clay/Apollo enrichment,
      ZeroBounce/NeverBounce verification).
-   - CSV import with flexible column names (see `frontend/prospects_template.csv`).
+   - Import from **CSV, Excel (.xlsx/.xls) or PDF** (see
+     `frontend/prospects_template.csv`). CSV is read in the browser; Excel and
+     PDF go to the backend's `POST /leads/parse/` (`table_extract.py`), which
+     returns rows without storing anything. PDFs can be ruled tables (merged
+     across pages, repeated headers dropped), tables laid out by alignment
+     only, directory listings (one entry per block of lines), or scanned
+     (OCR, when Tesseract is available). Every import opens a review step:
+     pick the sheet/table, skip title rows, and confirm which column is which
+     (headers and column contents are recognized automatically). Labels like
+     "Phone:" are stripped and "street, city, ST zip" addresses are split.
      On import, consumer emails (gmail, yahoo, …) are purged, duplicates are
      merged, and region is derived from county → ZIP → city; out-of-territory
      and out-of-range (20–500 employees) rows can be dropped.

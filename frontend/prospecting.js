@@ -300,32 +300,305 @@
 
   // --- Import ---------------------------------------------------------------
 
+  // Excel and PDF files are parsed by the backend (/leads/parse/); CSV is read
+  // here so it keeps working without the server. Every format then goes
+  // through the same review step: pick the sheet/table, skip title rows, and
+  // map columns to lead fields.
+  const API = (window.API_BASE || "http://localhost:8000").replace(/\/$/, "");
+
+  const FIELD_LABELS = {
+    company: "Company", address: "Address", city: "City", county: "County", state: "State", zip: "ZIP",
+    industry: "Industry", employees: "Employees", website: "Website", email: "Email", phone: "Phone",
+    contactName: "Contact name", firstName: "First name", lastName: "Last name", contactTitle: "Contact title",
+    emailStatus: "Email status", source: "Source", stage: "Stage", notes: "Notes", id: "Lead ID (re-import)",
+  };
+
+  const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+  const PHONE_RE = /^(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(\s*(x|ext\.?)\s*\d+)?$/i;
+  const ZIP_RE = /^\d{5}(-\d{4})?$/;
+  const STATE_RE = /^(PA|NJ|DE|NY|MD)$/i;
+  const WEB_RE = /^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|net|org|biz|us|co|io|info|health|law|pro)(\/\S*)?$/i;
+  const STREET_RE = /^\d+[A-Z]?\s+\S+/i;
+  const CITY_ST_ZIP_RE = /,\s*[^,]+?,?\s+[A-Z]{2}\s+\d{5}(-\d{4})?$/;
+  // Directory PDFs often prefix values: "Phone: 215-…", "Email: info@…".
+  const LABEL_PREFIX_RE = /^(phone|tel|telephone|ph|fax|e-?mail|web\s?site|web|url|address|addr|contact)\s*[:#]\s*/i;
+  const EMPTY_RE = /^(n\/?a|none|null|-+|—)$/i;
+
+  const STATE_NAMES = { pennsylvania: "PA", "new jersey": "NJ", delaware: "DE", "new york": "NY", maryland: "MD" };
+  function normalizeState(v) {
+    const s = v.trim().toLowerCase().replace(/\.$/, "");
+    return STATE_NAMES[s] || (s === "penn" || s === "penna" ? "PA" : v.trim().toUpperCase().slice(0, 2));
+  }
+
+  function cleanValue(field, raw) {
+    const v = String(raw ?? "").replace(LABEL_PREFIX_RE, "").trim();
+    if (EMPTY_RE.test(v)) return "";
+    if (field === "email") {
+      const m = v.match(EMAIL_RE);
+      return m ? m[0].toLowerCase() : "";
+    }
+    if (field === "website") return v.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+    return v;
+  }
+
+  // "123 Market St, Philadelphia, PA 19103" (or "Philadelphia, PA 19103") in the
+  // address column fills city/state/zip when those aren't separate columns.
+  function splitAddress(lead) {
+    if (!lead.address) return;
+    const full = lead.address.match(/^(.+?),\s*([^,]+?),?\s+([A-Z]{2})\s+(\d{5})(?:-\d{4})?$/);
+    const cityOnly = !full && lead.address.match(/^([^,\d][^,]*?),?\s+([A-Z]{2})\s+(\d{5})(?:-\d{4})?$/);
+    const parts = full ? full.slice(1) : cityOnly ? ["", ...cityOnly.slice(1)] : null;
+    if (!parts) return;
+    const [street, city, st, zip] = parts;
+    lead.address = street;
+    lead.city = lead.city || city;
+    lead.state = lead.state || st.toUpperCase();
+    lead.zip = lead.zip || zip;
+  }
+
+  // For files without a header row: recognize columns by what's in them.
+  function guessByContent(rows, width) {
+    const sample = rows.slice(0, 300);
+    const mapping = Array(width).fill("");
+    const rate = (i, test) => {
+      let n = 0, hit = 0;
+      for (const r of sample) {
+        const v = (r[i] || "").replace(LABEL_PREFIX_RE, "").trim();
+        if (!v || EMPTY_RE.test(v)) continue;
+        n++;
+        if (test(v)) hit++;
+      }
+      return n ? hit / n : 0;
+    };
+    const tests = [
+      ["email", (v) => EMAIL_RE.test(v)],
+      ["website", (v) => WEB_RE.test(v) && !v.includes("@")],
+      ["phone", (v) => PHONE_RE.test(v)],
+      ["zip", (v) => ZIP_RE.test(v)],
+      ["state", (v) => STATE_RE.test(v)],
+      ["address", (v) => STREET_RE.test(v) || CITY_ST_ZIP_RE.test(v)],
+    ];
+    for (const [field, test] of tests) {
+      let best = -1, bestRate = 0.5;
+      for (let i = 0; i < width; i++) {
+        if (mapping[i]) continue;
+        const r = rate(i, test);
+        if (r > bestRate) { best = i; bestRate = r; }
+      }
+      if (best >= 0) mapping[best] = field;
+    }
+    // Company: the leftmost remaining column that's mostly words, not numbers.
+    for (let i = 0; i < width; i++) {
+      if (!mapping[i] && rate(i, (v) => /[a-z]{2}/i.test(v) && !/^[\d\s.,()$%-]+$/.test(v)) > 0.6) {
+        mapping[i] = "company";
+        break;
+      }
+    }
+    return mapping;
+  }
+
+  // Finds a header row in the first 10 rows (title rows above it are skipped);
+  // otherwise falls back to guessing columns from their contents.
+  function autoSetup(rows, width) {
+    for (let i = 0; i < Math.min(10, rows.length - 1); i++) {
+      const m = mapHeaders(rows[i]);
+      if (m.company !== undefined && Object.keys(m).length >= 2) {
+        const mapping = Array(width).fill("");
+        for (const [f, idx] of Object.entries(m)) if (FIELD_LABELS[f]) mapping[idx] = f;
+        return { skip: i, header: true, mapping };
+      }
+    }
+    return { skip: 0, header: false, mapping: guessByContent(rows, width) };
+  }
+
+  const setupScore = (st) =>
+    st.mapping.filter(Boolean).length + (st.mapping.includes("company") ? 5 : 0) + (st.header ? 1 : 0);
+
+  async function readLeadFile(file) {
+    const ext = file.name.toLowerCase().split(".").pop();
+    if (ext === "csv") return [{ name: file.name, kind: "csv", rows: parseCsv(await file.text()), note: "" }];
+    if (!["xlsx", "xls", "pdf"].includes(ext)) throw new Error("Use a .csv, .xlsx, .xls or .pdf file.");
+    const fd = new FormData();
+    fd.append("file", file);
+    let res;
+    try {
+      res = await fetch(`${API}/leads/parse/`, { method: "POST", body: fd });
+    } catch (err) {
+      throw new Error(`Excel and PDF files are read by the backend server, which couldn't be reached (${err.message}). CSV files still import without it.`);
+    }
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (_) {
+      // non-JSON error body
+    }
+    if (!res.ok) throw new Error((data && typeof data.detail === "string" && data.detail) || `Server error ${res.status}`);
+    return data.sheets;
+  }
+
+  let review = null; // { fileName, sheets, sheetIdx, skip, header, mapping }
+
+  function useSheet(idx) {
+    const sheet = review.sheets[idx];
+    const st = autoSetup(sheet.rows, sheet.width);
+    Object.assign(review, { sheetIdx: idx }, st);
+  }
+
   $("lead-import-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     $("import-error").textContent = "";
     $("import-report").hidden = true;
     const file = $("lead-file").files[0];
     if (!file) return;
-
-    let rows;
+    const button = e.target.querySelector("button[type=submit]");
+    button.disabled = true;
+    button.textContent = "Reading file…";
     try {
-      rows = parseCsv(await file.text());
+      const sheets = (await readLeadFile(file))
+        .map((s) => {
+          const width = Math.max(0, ...s.rows.map((r) => r.length));
+          return { ...s, width, rows: s.rows.map((r) => [...r, ...Array(width - r.length).fill("")]) };
+        })
+        .filter((s) => s.rows.length && s.width);
+      if (!sheets.length) throw new Error("No rows found in this file.");
+      review = { fileName: file.name, sheets };
+      // Start on the sheet/table whose columns are recognized best.
+      let best = 0, bestScore = -1;
+      sheets.forEach((s, i) => {
+        const score = setupScore(autoSetup(s.rows, s.width));
+        if (score > bestScore) { best = i; bestScore = score; }
+      });
+      useSheet(best);
+      renderReview();
     } catch (err) {
-      $("import-error").textContent = `Could not read file: ${err.message}`;
-      return;
+      $("import-error").textContent = err.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = "Read File";
     }
-    if (rows.length < 2) {
-      $("import-error").textContent = "No data rows found.";
-      return;
+  });
+
+  function reviewDataRows() {
+    return review.sheets[review.sheetIdx].rows.slice(review.skip + (review.header ? 1 : 0));
+  }
+
+  const PREVIEW_ROWS = 8;
+
+  function renderReview() {
+    const sheet = review.sheets[review.sheetIdx];
+    $("import-review").hidden = false;
+    $("ir-file").textContent = review.fileName;
+
+    const sel = $("ir-sheet");
+    sel.replaceChildren(...review.sheets.map((s, i) => new Option(`${s.name} (${s.rows.length} rows)`, String(i))));
+    sel.value = String(review.sheetIdx);
+    $("ir-sheet-wrap").hidden = review.sheets.length < 2;
+    $("ir-note").textContent = sheet.note || "";
+    $("ir-skip").value = review.skip;
+    $("ir-skip").max = Math.max(0, sheet.rows.length - 1);
+    $("ir-header").checked = review.header;
+
+    const head = $("ir-head");
+    head.replaceChildren();
+    const selRow = document.createElement("tr");
+    for (let i = 0; i < sheet.width; i++) {
+      const th = document.createElement("th");
+      const s = document.createElement("select");
+      s.dataset.col = i;
+      s.setAttribute("aria-label", `Field for column ${i + 1}`);
+      s.append(new Option("— skip —", ""));
+      for (const [f, label] of Object.entries(FIELD_LABELS)) s.append(new Option(label, f));
+      s.value = review.mapping[i] || "";
+      if (s.value) th.className = "mapped";
+      th.append(s);
+      selRow.append(th);
     }
-    const map = mapHeaders(rows[0]);
-    if (map.company === undefined) {
-      $("import-error").textContent =
-        "Couldn't find a company / business name column. Rename it to \"company\" and retry.";
-      return;
+    head.append(selRow);
+    if (review.header) {
+      const hdr = document.createElement("tr");
+      hdr.className = "hdr";
+      for (const v of sheet.rows[review.skip] || []) {
+        const th = document.createElement("th");
+        th.textContent = v;
+        hdr.append(th);
+      }
+      head.append(hdr);
     }
 
-    const sourceLabel = $("lead-source").value.trim() || file.name;
+    const rows = reviewDataRows();
+    const body = $("ir-body");
+    body.replaceChildren();
+    for (const r of rows.slice(0, PREVIEW_ROWS)) {
+      const tr = document.createElement("tr");
+      r.forEach((v, i) => {
+        const td = document.createElement("td");
+        td.textContent = v;
+        if (review.mapping[i]) td.className = "mapped";
+        tr.append(td);
+      });
+      body.append(tr);
+    }
+
+    const mapped = review.mapping.map((f, i) => (f ? `${FIELD_LABELS[f]} ← column ${i + 1}` : "")).filter(Boolean);
+    const hasCompany = review.mapping.includes("company");
+    $("ir-summary").textContent =
+      `${rows.length} row${rows.length === 1 ? "" : "s"} to import` +
+      (rows.length > PREVIEW_ROWS ? ` (first ${PREVIEW_ROWS} shown)` : "") +
+      `. ${mapped.length ? mapped.join(" · ") : "No columns mapped yet."}`;
+    $("ir-error").textContent = hasCompany ? "" : "Choose which column holds the company / business name.";
+    $("ir-import").disabled = !hasCompany || !rows.length;
+    $("ir-import").textContent = `Import ${rows.length} row${rows.length === 1 ? "" : "s"}`;
+  }
+
+  $("ir-sheet").addEventListener("change", (e) => {
+    useSheet(Number(e.target.value));
+    renderReview();
+  });
+  $("ir-skip").addEventListener("input", (e) => {
+    const sheet = review.sheets[review.sheetIdx];
+    review.skip = Math.min(Math.max(0, Math.floor(Number(e.target.value) || 0)), sheet.rows.length - 1);
+    renderReview();
+  });
+  $("ir-header").addEventListener("change", (e) => {
+    review.header = e.target.checked;
+    if (review.header) {
+      // Re-read the mapping from the header row's names where they're recognized.
+      const m = mapHeaders(review.sheets[review.sheetIdx].rows[review.skip] || []);
+      if (Object.keys(m).length) {
+        review.mapping = review.mapping.map(() => "");
+        for (const [f, idx] of Object.entries(m)) if (FIELD_LABELS[f]) review.mapping[idx] = f;
+      }
+    }
+    renderReview();
+  });
+  $("ir-head").addEventListener("change", (e) => {
+    const col = e.target.dataset.col;
+    if (col === undefined) return;
+    const field = e.target.value;
+    // Each field maps to one column: picking it here clears it elsewhere.
+    if (field) review.mapping = review.mapping.map((f) => (f === field ? "" : f));
+    review.mapping[Number(col)] = field;
+    renderReview();
+  });
+  $("ir-cancel").addEventListener("click", () => {
+    review = null;
+    $("import-review").hidden = true;
+  });
+
+  $("ir-import").addEventListener("click", () => {
+    if (!review) return;
+    const map = {};
+    review.mapping.forEach((f, i) => { if (f) map[f] = i; });
+    if (map.company === undefined) return;
+    const sourceLabel = $("lead-source").value.trim() || review.fileName;
+    importRows(reviewDataRows(), map, sourceLabel);
+    review = null;
+    $("import-review").hidden = true;
+    $("lead-file").value = "";
+    $("lead-source").value = "";
+  });
+
+  function importRows(rows, map, sourceLabel) {
     const dropOutOfTerritory = $("skip-out-of-territory").checked;
     const dropHeadcount = $("skip-headcount").checked;
 
@@ -334,14 +607,14 @@
     const report = { added: 0, merged: 0, purgedEmails: 0, noName: 0, territory: 0, headcount: 0, dupInFile: 0 };
     const now = new Date().toISOString();
 
-    for (const r of rows.slice(1)) {
-      const get = (f) => (map[f] === undefined ? "" : (r[map[f]] || "").trim());
+    for (const r of rows) {
+      const get = (f) => (map[f] === undefined ? "" : cleanValue(f, r[map[f]]));
       const lead = {
         company: get("company"),
         address: get("address"),
         city: get("city"),
         county: get("county"),
-        state: get("state").toUpperCase().slice(0, 2),
+        state: normalizeState(get("state")),
         zip: get("zip"),
         industry: get("industry"),
         employees: parseEmployees(get("employees")),
@@ -355,6 +628,7 @@
         stage: get("stage").toLowerCase(),
         notes: get("notes"),
       };
+      splitAddress(lead);
       if (!lead.company) { report.noName++; continue; }
       if (lead.email && isConsumerEmail(lead.email)) {
         lead.email = "";
@@ -410,10 +684,7 @@
     if (report.noName) lines.push(`${report.noName} rows without a company name skipped.`);
     $("import-report").innerHTML = lines.map((l) => `<p>${l}</p>`).join("");
     $("import-report").hidden = false;
-    e.target.reset();
-    $("skip-out-of-territory").checked = dropOutOfTerritory;
-    $("skip-headcount").checked = dropHeadcount;
-  });
+  }
 
   // --- Pipeline table ---------------------------------------------------------
 

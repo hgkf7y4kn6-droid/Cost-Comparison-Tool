@@ -274,3 +274,16 @@ table.lines td.ext { vertical-align: middle; font-weight: 600; }
   #proposal-print .sub { font-size: 8.5pt; color: #555; }
   #proposal-print tr { break-inside: avoid; }
 }
+
+/* ---------- Lead import review ---------- */
+.review { border: 1px solid var(--border); border-radius: 8px; padding: 0.6em 0.8em; margin: 0.8em 0; background: #fbfdff; }
+.review h3 { margin-top: 0.2em; }
+#ir-sheet-wrap { display: flex; flex-direction: column; gap: 0.2em; font-size: 0.85em; max-width: 520px; }
+.ir-controls { display: flex; flex-wrap: wrap; gap: 0.4em 1.5em; align-items: center; font-size: 0.85em; margin: 0.5em 0; }
+.ir-controls input[type="number"] { width: 5em; display: inline-block; }
+table.preview th, table.preview td { white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+table.preview select { min-width: 8.5em; font-size: 0.9em; padding: 0.25em; }
+table.preview th.mapped select { border-color: var(--blue); background: #ebf8ff; }
+table.preview td.mapped { background: #f0f9ff; }
+table.preview tr.hdr th { background: #edf2f7; font-style: italic; color: #4a5568; }
+.btn:disabled:not(.small) { cursor: not-allowed; }

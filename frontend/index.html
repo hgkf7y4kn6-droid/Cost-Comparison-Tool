@@ -75,14 +75,40 @@
     <!-- B. Import -->
     <section>
       <h2>B. Import leads</h2>
-      <p class="hint">CSV from any of the sources above, or a re-import of an enriched export. Recognized columns (any order, flexible names): company / business name, address, city, county, state, zip, industry, employees, website, email, phone, contact_name, contact_title, email_status, source. See <a href="prospects_template.csv" download>prospects_template.csv</a>.</p>
+      <p class="hint">CSV, Excel (.xlsx / .xls) or PDF from any of the sources above, or a re-import of an enriched export. You'll review the rows and confirm which column is which before anything is imported. Column names are recognized automatically when present (company / business name, address, city, county, state, zip, industry, employees, website, email, phone, contact name/title, email status, source); PDFs can be ruled tables, aligned columns, or directory listings. See <a href="prospects_template.csv" download>prospects_template.csv</a>.</p>
       <form id="lead-import-form">
-        <input type="file" id="lead-file" accept=".csv,text/csv" required>
+        <input type="file" id="lead-file" accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
         <input type="text" id="lead-source" placeholder="Source label (e.g. PA DOS registry, OpenDataPhilly, Lancaster Chamber)">
         <label class="check"><input type="checkbox" id="skip-out-of-territory" checked> Drop rows outside Philadelphia / NJ / Lehigh Valley / Lancaster</label>
         <label class="check"><input type="checkbox" id="skip-headcount"> Drop rows whose known headcount is outside 20–500</label>
-        <button type="submit" class="btn blue">Import Leads</button>
+        <button type="submit" class="btn blue">Read File</button>
       </form>
+      <p class="hint">CSV is read in your browser. Excel and PDF are read by the backend server (nothing is stored there); scanned PDFs are OCR'd, so check those rows carefully.</p>
+
+      <div id="import-review" class="review" hidden>
+        <h3>Review import — <span id="ir-file"></span></h3>
+        <label id="ir-sheet-wrap">Sheet / table
+          <select id="ir-sheet"></select>
+        </label>
+        <p id="ir-note" class="hint"></p>
+        <div class="ir-controls">
+          <label>Skip the first <input type="number" id="ir-skip" min="0" step="1" value="0"> rows (titles, notes)</label>
+          <label class="check"><input type="checkbox" id="ir-header"> The next row is column headers</label>
+        </div>
+        <p class="hint">Pick the lead field for each column (highlighted = will be imported). Company is required. Labels like “Phone:” are stripped, emails are pulled out of mixed text, and a full “street, city, ST zip” address fills city/state/ZIP.</p>
+        <div class="table-wrap">
+          <table class="preview">
+            <thead id="ir-head"></thead>
+            <tbody id="ir-body"></tbody>
+          </table>
+        </div>
+        <p id="ir-summary" class="hint"></p>
+        <p id="ir-error" class="status err" aria-live="assertive"></p>
+        <div class="row-buttons">
+          <button type="button" class="btn green" id="ir-import">Import</button>
+          <button type="button" class="btn small" id="ir-cancel">Cancel</button>
+        </div>
+      </div>
       <div id="import-report" class="notice" hidden aria-live="polite"></div>
       <p id="import-error" class="status err" aria-live="assertive"></p>
     </section>
