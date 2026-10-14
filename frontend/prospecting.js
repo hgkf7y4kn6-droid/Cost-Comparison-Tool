@@ -1,0 +1,851 @@
+// Prospecting tab: import, clean, score and work regional B2B leads.
+// Leads live in this browser's localStorage (export CSV to back up or share).
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const STORE_KEY = "ob.prospecting.v1";
+
+  // --- Reference data -------------------------------------------------------
+
+  const REGIONS = {
+    philadelphia: "Philadelphia",
+    lehigh: "Allentown / Lehigh Valley",
+    lancaster: "Lancaster",
+    nj: "New Jersey",
+    other: "Out of territory",
+  };
+
+  const COUNTY_REGION = {
+    philadelphia: "philadelphia", bucks: "philadelphia", montgomery: "philadelphia",
+    delaware: "philadelphia", chester: "philadelphia",
+    lehigh: "lehigh", northampton: "lehigh",
+    lancaster: "lancaster",
+    camden: "nj", burlington: "nj", mercer: "nj", gloucester: "nj", salem: "nj",
+    cumberland: "nj", atlantic: "nj", ocean: "nj", monmouth: "nj", middlesex: "nj",
+    somerset: "nj", hunterdon: "nj",
+  };
+
+  const CITY_REGION = {
+    philadelphia: "philadelphia", "king of prussia": "philadelphia", conshohocken: "philadelphia",
+    norristown: "philadelphia", "media": "philadelphia", "west chester": "philadelphia",
+    allentown: "lehigh", bethlehem: "lehigh", easton: "lehigh", whitehall: "lehigh",
+    emmaus: "lehigh", "center valley": "lehigh", "breinigsville": "lehigh", fogelsville: "lehigh",
+    lancaster: "lancaster", lititz: "lancaster", ephrata: "lancaster", "elizabethtown": "lancaster",
+    "mount joy": "lancaster", "manheim": "lancaster", leola: "lancaster", "new holland": "lancaster",
+    camden: "nj", "cherry hill": "nj", trenton: "nj", princeton: "nj", "mount laurel": "nj",
+    "moorestown": "nj", "marlton": "nj", "voorhees": "nj", "pennsauken": "nj", "ewing": "nj",
+  };
+
+  // County is the most reliable signal (state registries publish it), then ZIP
+  // prefix (Google Maps exports), then city. Several county names exist in both
+  // PA and NJ, so a county match must agree with the state when one is given.
+  function regionFor(lead) {
+    const state = (lead.state || "").trim().toUpperCase();
+    const county = (lead.county || "").toLowerCase().replace(/\s+county$/, "").trim();
+    const city = (lead.city || "").toLowerCase().trim();
+    const zip = (lead.zip || "").trim().padStart(5, "0").slice(0, 5);
+    const z3 = Number(zip.slice(0, 3));
+
+    if (county && COUNTY_REGION[county]) {
+      const r = COUNTY_REGION[county];
+      if (!state || (r === "nj") === (state === "NJ")) return r;
+    }
+    if (/^\d{5}$/.test(zip) && zip !== "00000") {
+      if (z3 >= 190 && z3 <= 191) return "philadelphia";
+      if (z3 >= 180 && z3 <= 181) return "lehigh";
+      if (z3 >= 175 && z3 <= 176) return "lancaster";
+      if (z3 >= 80 && z3 <= 86) return "nj";
+    }
+    if (city && CITY_REGION[city]) return CITY_REGION[city];
+    if (state === "NJ") return "nj";
+    return "other";
+  }
+
+  const SEGMENTS = {
+    healthcare: {
+      label: "Healthcare / medical",
+      audience: "healthcare providers",
+      keywords: ["health", "medical", "hospital", "clinic", "dental", "physician", "pharma",
+        "rehab*", "nursing", "hospice", "senior living", "surg*", "orthopedic*", "pediatric*",
+        "therap*", "urgent care", "home care"],
+      products: ["apparel", "janitorial", "furniture"],
+    },
+    property: {
+      label: "Property mgmt / CRE",
+      audience: "property managers",
+      keywords: ["property", "properties", "realty", "real estate", "leasing", "realtors",
+        "commercial real", "building management", "facilities management"],
+      products: ["janitorial", "furniture"],
+    },
+    industrial: {
+      label: "Hospitality / distribution / mfg",
+      audience: "distribution, manufacturing and hospitality teams",
+      keywords: ["warehous*", "logistics", "distribution", "manufactur*", "hotel*", "hospitality",
+        "restaurant*", "food*", "packaging", "freight", "fabricat*", "industrial", "supply",
+        "trucking", "brewing", "brewery"],
+      products: ["apparel", "janitorial", "furniture"],
+    },
+    corporate: {
+      label: "Corporate / professional",
+      audience: "professional services firms",
+      keywords: ["law", "legal", "attorney", "accounting", "cpa", "financial", "insurance",
+        "bank*", "consult*", "software", "technolog*", "engineering", "marketing", "agency",
+        "capital", "advisor*", "partners", "group", "solutions", "services", "architect*"],
+      products: ["furniture", "apparel", "janitorial"],
+    },
+    other: { label: "Unclassified", audience: "businesses", keywords: [], products: [] },
+  };
+
+  const PRODUCTS = {
+    furniture: {
+      label: "Office furniture & design",
+      titles: ["Director of Facilities", "VP of Real Estate / Operations", "Office Manager / Workplace Experience"],
+      why: "They oversee office moves, space layouts, and major furniture renovations.",
+      pitch: "office furniture",
+    },
+    janitorial: {
+      label: "Janitorial & facility supplies",
+      titles: ["Facilities Manager", "Operations Manager", "Procurement Specialist"],
+      why: "They manage day-to-day building upkeep and order cleaning/restocking supplies.",
+      pitch: "janitorial supply",
+    },
+    apparel: {
+      label: "Uniforms & corporate apparel",
+      titles: ["HR Director", "Marketing Manager (Corporate)", "Operations Lead (Field/Techs)"],
+      why: "HR coordinates employee apparel programs; Marketing handles corporate branding.",
+      pitch: "uniform & apparel",
+    },
+  };
+
+  const TRIGGERS = {
+    newOffice: "Opened / opening a new location",
+    facilitiesHire: "Hiring Facilities Manager / Office Admin",
+    relocation: "HQ relocation in local business news",
+    uniformedTeam: "Field techs / uniformed on-site team",
+  };
+
+  const STAGES = {
+    new: "New",
+    enriched: "Enriched",
+    verified: "Verified",
+    contacted: "Contacted",
+    qualified: "Qualified",
+    disqualified: "Disqualified",
+  };
+
+  const CONSUMER_DOMAINS = new Set([
+    "gmail.com", "googlemail.com", "yahoo.com", "ymail.com", "rocketmail.com", "hotmail.com",
+    "outlook.com", "live.com", "msn.com", "aol.com", "icloud.com", "me.com", "mac.com",
+    "comcast.net", "verizon.net", "att.net", "sbcglobal.net", "bellsouth.net", "cox.net",
+    "charter.net", "optonline.net", "earthlink.net", "protonmail.com", "proton.me",
+    "gmx.com", "mail.com", "zoho.com", "yandex.com", "ptd.net", "rcn.com", "juno.com",
+  ]);
+
+  const HEADCOUNT_MIN = 20;
+  const HEADCOUNT_MAX = 500;
+
+  // --- Storage --------------------------------------------------------------
+
+  let state = { leads: [], playbook: {} };
+  let openId = null; // lead shown in the detail panel
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (saved && Array.isArray(saved.leads)) state = { playbook: {}, ...saved };
+  } catch (_) {
+    // storage unavailable or corrupt — start empty
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    } catch (_) {
+      // private mode / quota — the session still works, it just won't persist
+    }
+  }
+
+  const newId = () => "L" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  // --- Lead helpers ---------------------------------------------------------
+
+  function emailDomain(email) {
+    const at = (email || "").lastIndexOf("@");
+    return at < 0 ? "" : email.slice(at + 1).trim().toLowerCase();
+  }
+  const isConsumerEmail = (email) => CONSUMER_DOMAINS.has(emailDomain(email));
+
+  function classifySegment(lead) {
+    const text = `${lead.industry || ""} ${lead.company || ""}`.toLowerCase();
+    for (const key of ["healthcare", "property", "industrial", "corporate"]) {
+      // Whole-word match so "law" doesn't hit "lawn"; a trailing * marks a stem.
+      if (SEGMENTS[key].keywords.some((k) => new RegExp(`\\b${k.replace("*", "\\w*")}\\b`).test(text))) return key;
+    }
+    return "other";
+  }
+
+  function sizeBand(lead) {
+    const n = Number(lead.employees);
+    if (!lead.employees && lead.employees !== 0) return "unknown";
+    if (!Number.isFinite(n)) return "unknown";
+    return n >= HEADCOUNT_MIN && n <= HEADCOUNT_MAX ? "in" : "out";
+  }
+
+  function fitScore(lead) {
+    let score = 0;
+    if (lead.region && lead.region !== "other") score += 20;
+    const band = sizeBand(lead);
+    score += band === "in" ? 25 : band === "unknown" ? 10 : 0;
+    if (lead.segment && lead.segment !== "other") score += 20;
+    if (lead.email && lead.emailStatus !== "invalid") score += lead.emailStatus === "valid" ? 10 : 5;
+    if (lead.contactName || lead.contactTitle) score += 5;
+    const triggers = Object.values(lead.triggers || {}).filter(Boolean).length;
+    score += Math.min(20, triggers * 7);
+    return Math.min(100, score);
+  }
+
+  function companyKey(lead) {
+    const name = (lead.company || "").toLowerCase()
+      .replace(/[.,'"&]/g, " ")
+      .replace(/\b(inc|llc|l l c|corp|corporation|co|company|ltd|lp|llp|pc|pllc|the)\b/g, " ")
+      .replace(/\s+/g, " ").trim();
+    const where = (lead.zip || "").slice(0, 5) || (lead.city || "").toLowerCase().trim();
+    return `${name}|${where}`;
+  }
+
+  function parseEmployees(value) {
+    if (value === undefined || value === null || value === "") return "";
+    const nums = String(value).replace(/,/g, "").match(/\d+/g);
+    if (!nums) return "";
+    if (nums.length >= 2) return Math.round((Number(nums[0]) + Number(nums[1])) / 2);
+    return Number(nums[0]);
+  }
+
+  function normalizeLead(lead) {
+    lead.region = lead.region || regionFor(lead);
+    lead.segment = lead.segment || classifySegment(lead);
+    if (!Array.isArray(lead.products) || !lead.products.length) {
+      lead.products = [...(SEGMENTS[lead.segment] || SEGMENTS.other).products];
+    }
+    lead.triggers = lead.triggers || {};
+    lead.stage = STAGES[lead.stage] ? lead.stage : "new";
+    lead.emailStatus = lead.emailStatus || "unverified";
+    lead.score = fitScore(lead);
+    return lead;
+  }
+
+  // --- CSV ------------------------------------------------------------------
+
+  function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let field = "";
+    let quoted = false;
+    text = text.replace(/^﻿/, "");
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; } else quoted = false;
+        } else field += c;
+      } else if (c === '"') quoted = true;
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); field = "";
+        if (row.some((v) => v.trim() !== "")) rows.push(row);
+        row = [];
+      } else field += c;
+    }
+    row.push(field);
+    if (row.some((v) => v.trim() !== "")) rows.push(row);
+    return rows;
+  }
+
+  const csvCell = (v) => {
+    const s = v === undefined || v === null ? "" : String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  // Header aliases, matched after lowercasing and stripping non-alphanumerics.
+  // Earlier aliases win, so specific names beat generic ones like "name".
+  const FIELD_ALIASES = {
+    id: ["id", "leadid"],
+    company: ["company", "companyname", "businessname", "entityname", "legalname", "organization",
+      "organizationname", "tradename", "dba", "doingbusinessas", "account", "accountname", "name"],
+    address: ["address", "streetaddress", "address1", "street", "businessaddress", "fulladdress", "location"],
+    city: ["city", "municipality", "town"],
+    county: ["county", "countyname"],
+    state: ["state", "st", "stateprovince"],
+    zip: ["zip", "zipcode", "postalcode", "postal"],
+    industry: ["industry", "naicsdescription", "category", "businesstype", "licensetype", "type",
+      "sicdescription", "naics", "description"],
+    employees: ["employees", "employeecount", "numberofemployees", "estimatednumemployees",
+      "headcount", "companysize", "size"],
+    website: ["website", "domain", "companydomain", "url", "site"],
+    email: ["email", "emailaddress", "businessemail", "workemail", "contactemail"],
+    phone: ["phone", "phonenumber", "businessphone", "telephone", "companyphone"],
+    contactName: ["contactname", "fullname", "contact", "person"],
+    firstName: ["firstname"],
+    lastName: ["lastname"],
+    contactTitle: ["contacttitle", "title", "jobtitle", "position"],
+    emailStatus: ["emailstatus", "verification", "verificationstatus", "zbstatus", "result"],
+    source: ["source", "leadsource"],
+    stage: ["stage"],
+    notes: ["notes"],
+  };
+
+  function mapHeaders(headers) {
+    const norm = headers.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    const map = {};
+    const used = new Set();
+    for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+      for (const alias of aliases) {
+        const idx = norm.findIndex((h, i) => h === alias && !used.has(i));
+        if (idx >= 0) { map[field] = idx; used.add(idx); break; }
+      }
+    }
+    return map;
+  }
+
+  function normalizeEmailStatus(v) {
+    const s = (v || "").toLowerCase();
+    if (!s) return "";
+    if (/^(valid|deliverable|ok|good|verified)$/.test(s)) return "valid";
+    if (/invalid|undeliverable|bounce|bad|spamtrap|abuse|do_not_mail/.test(s)) return "invalid";
+    if (/catch|accept|risky|unknown/.test(s)) return "catch-all";
+    return "";
+  }
+
+  // --- Import ---------------------------------------------------------------
+
+  $("lead-import-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("import-error").textContent = "";
+    $("import-report").hidden = true;
+    const file = $("lead-file").files[0];
+    if (!file) return;
+
+    let rows;
+    try {
+      rows = parseCsv(await file.text());
+    } catch (err) {
+      $("import-error").textContent = `Could not read file: ${err.message}`;
+      return;
+    }
+    if (rows.length < 2) {
+      $("import-error").textContent = "No data rows found.";
+      return;
+    }
+    const map = mapHeaders(rows[0]);
+    if (map.company === undefined) {
+      $("import-error").textContent =
+        "Couldn't find a company / business name column. Rename it to \"company\" and retry.";
+      return;
+    }
+
+    const sourceLabel = $("lead-source").value.trim() || file.name;
+    const dropOutOfTerritory = $("skip-out-of-territory").checked;
+    const dropHeadcount = $("skip-headcount").checked;
+
+    const byId = new Map(state.leads.map((l) => [l.id, l]));
+    const byKey = new Map(state.leads.map((l) => [companyKey(l), l]));
+    const report = { added: 0, merged: 0, purgedEmails: 0, noName: 0, territory: 0, headcount: 0, dupInFile: 0 };
+    const now = new Date().toISOString();
+
+    for (const r of rows.slice(1)) {
+      const get = (f) => (map[f] === undefined ? "" : (r[map[f]] || "").trim());
+      const lead = {
+        company: get("company"),
+        address: get("address"),
+        city: get("city"),
+        county: get("county"),
+        state: get("state").toUpperCase().slice(0, 2),
+        zip: get("zip"),
+        industry: get("industry"),
+        employees: parseEmployees(get("employees")),
+        website: get("website"),
+        email: get("email").toLowerCase(),
+        phone: get("phone"),
+        contactName: get("contactName") || [get("firstName"), get("lastName")].filter(Boolean).join(" "),
+        contactTitle: get("contactTitle"),
+        emailStatus: normalizeEmailStatus(get("emailStatus")),
+        source: get("source") || sourceLabel,
+        stage: get("stage").toLowerCase(),
+        notes: get("notes"),
+      };
+      if (!lead.company) { report.noName++; continue; }
+      if (lead.email && isConsumerEmail(lead.email)) {
+        lead.email = "";
+        lead.emailStatus = "";
+        report.purgedEmails++;
+      }
+
+      const existing = (get("id") && byId.get(get("id"))) || byKey.get(companyKey(lead));
+      if (existing) {
+        // Waterfall re-import: fill gaps, and take newer enrichment/verification values.
+        let changed = false;
+        if (lead.email && lead.email !== existing.email && !lead.emailStatus) lead.emailStatus = "unverified";
+        for (const [k, v] of Object.entries(lead)) {
+          if (v === "" || k === "source" || k === "stage") continue;
+          const overwrite = ["emailStatus", "employees", "contactName", "contactTitle", "email"].includes(k);
+          if (existing[k] === undefined || existing[k] === "" || (overwrite && existing[k] !== v)) {
+            existing[k] = v;
+            changed = true;
+          }
+        }
+        if (changed) {
+          if (existing.stage === "new" && (lead.contactName || lead.contactTitle)) existing.stage = "enriched";
+          if (["new", "enriched"].includes(existing.stage) && existing.emailStatus === "valid") existing.stage = "verified";
+          existing.updated = now;
+          existing.score = fitScore(existing);
+          report.merged++;
+        } else {
+          report.dupInFile++;
+        }
+        continue;
+      }
+
+      normalizeLead(lead);
+      if (dropOutOfTerritory && lead.region === "other") { report.territory++; continue; }
+      if (dropHeadcount && sizeBand(lead) === "out") { report.headcount++; continue; }
+      lead.id = newId();
+      lead.created = lead.updated = now;
+      state.leads.push(lead);
+      byId.set(lead.id, lead);
+      byKey.set(companyKey(lead), lead);
+      report.added++;
+    }
+
+    save();
+    renderAll();
+    const lines = [
+      `<strong>${report.added}</strong> new leads added, <strong>${report.merged}</strong> existing leads updated.`,
+    ];
+    if (report.purgedEmails) lines.push(`${report.purgedEmails} consumer email addresses purged (company kept).`);
+    if (report.dupInFile) lines.push(`${report.dupInFile} duplicates skipped (no new info).`);
+    if (report.territory) lines.push(`${report.territory} rows outside the four target regions dropped.`);
+    if (report.headcount) lines.push(`${report.headcount} rows outside 20–500 employees dropped.`);
+    if (report.noName) lines.push(`${report.noName} rows without a company name skipped.`);
+    $("import-report").innerHTML = lines.map((l) => `<p>${l}</p>`).join("");
+    $("import-report").hidden = false;
+    e.target.reset();
+    $("skip-out-of-territory").checked = dropOutOfTerritory;
+    $("skip-headcount").checked = dropHeadcount;
+  });
+
+  // --- Pipeline table ---------------------------------------------------------
+
+  function fillSelect(select, options, keepFirst) {
+    const first = keepFirst ? select.options[0] : null;
+    select.replaceChildren(...(first ? [first] : []));
+    for (const [value, label] of Object.entries(options)) {
+      select.append(new Option(label, value));
+    }
+  }
+
+  const segmentLabels = Object.fromEntries(Object.entries(SEGMENTS).map(([k, v]) => [k, v.label]));
+  fillSelect($("f-region"), REGIONS, true);
+  fillSelect($("f-segment"), segmentLabels, true);
+  fillSelect($("f-stage"), STAGES, true);
+
+  function filteredLeads() {
+    const q = $("f-search").value.trim().toLowerCase();
+    const region = $("f-region").value;
+    const segment = $("f-segment").value;
+    const stage = $("f-stage").value;
+    const size = $("f-size").value;
+    const sort = $("f-sort").value;
+    const list = state.leads.filter((l) =>
+      (!region || l.region === region) &&
+      (!segment || l.segment === segment) &&
+      (!stage || l.stage === stage) &&
+      (!size || sizeBand(l) === size) &&
+      (!q || [l.company, l.city, l.county, l.contactName, l.contactTitle, l.industry, l.email]
+        .some((v) => (v || "").toLowerCase().includes(q)))
+    );
+    const cmp = {
+      score: (a, b) => b.score - a.score || a.company.localeCompare(b.company),
+      company: (a, b) => a.company.localeCompare(b.company),
+      updated: (a, b) => (b.updated || "").localeCompare(a.updated || ""),
+    }[sort];
+    return list.sort(cmp);
+  }
+
+  const MAX_ROWS = 500;
+
+  function renderTable() {
+    const list = filteredLeads();
+    const tbody = $("lead-rows");
+    tbody.replaceChildren();
+    for (const l of list.slice(0, MAX_ROWS)) {
+      const tr = document.createElement("tr");
+      tr.tabIndex = 0;
+      tr.dataset.id = l.id;
+      if (l.id === openId) tr.className = "selected";
+      const cells = [
+        { text: String(l.score), cls: `score s${l.score >= 70 ? "hi" : l.score >= 45 ? "mid" : "lo"}` },
+        { text: l.company, sub: [l.city, l.state].filter(Boolean).join(", ") },
+        { text: REGIONS[l.region] || "" },
+        { text: SEGMENTS[l.segment] ? SEGMENTS[l.segment].label : "" },
+        { text: l.employees === "" || l.employees === undefined ? "—" : String(l.employees),
+          cls: sizeBand(l) === "out" ? "warn" : "" },
+        { text: l.contactName || "—", sub: l.contactTitle },
+        { text: l.email || "—", sub: l.email ? l.emailStatus : "" },
+        { text: STAGES[l.stage], cls: `stage st-${l.stage}` },
+      ];
+      for (const c of cells) {
+        const td = document.createElement("td");
+        const span = document.createElement("span");
+        span.textContent = c.text;
+        if (c.cls) span.className = c.cls;
+        td.append(span);
+        if (c.sub) {
+          const sub = document.createElement("div");
+          sub.className = "sub";
+          sub.textContent = c.sub;
+          td.append(sub);
+        }
+        tr.append(td);
+      }
+      tbody.append(tr);
+    }
+    const shown = Math.min(list.length, MAX_ROWS);
+    $("lead-count").textContent = list.length > MAX_ROWS
+      ? `Showing ${shown} of ${list.length} matching (${state.leads.length} total) — narrow the filters`
+      : `${list.length} of ${state.leads.length} leads`;
+    $("empty-leads").hidden = state.leads.length > 0;
+  }
+
+  function renderStageCounts() {
+    const counts = Object.fromEntries(Object.keys(STAGES).map((s) => [s, 0]));
+    for (const l of state.leads) counts[l.stage]++;
+    const bar = $("stage-counts");
+    bar.replaceChildren();
+    for (const [key, label] of Object.entries(STAGES)) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `stage-pill st-${key}` + ($("f-stage").value === key ? " active" : "");
+      b.innerHTML = `<strong></strong><span></span>`;
+      b.querySelector("strong").textContent = counts[key];
+      b.querySelector("span").textContent = label;
+      b.addEventListener("click", () => {
+        $("f-stage").value = $("f-stage").value === key ? "" : key;
+        renderAll();
+      });
+      bar.append(b);
+    }
+  }
+
+  function renderPlaybook() {
+    const boxes = document.querySelectorAll("#playbook input[data-step]");
+    let done = 0;
+    boxes.forEach((b) => {
+      b.checked = !!state.playbook[b.dataset.step];
+      if (b.checked) done++;
+    });
+    $("playbook-progress").textContent = `${done}/${boxes.length} steps done`;
+  }
+
+  function renderAll() {
+    renderStageCounts();
+    renderTable();
+    renderPlaybook();
+  }
+
+  document.querySelectorAll("#playbook input[data-step]").forEach((b) =>
+    b.addEventListener("change", () => {
+      state.playbook[b.dataset.step] = b.checked;
+      save();
+      renderPlaybook();
+    })
+  );
+
+  for (const id of ["f-search", "f-region", "f-segment", "f-stage", "f-size", "f-sort"]) {
+    $(id).addEventListener("input", renderAll);
+  }
+
+  $("lead-rows").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-id]");
+    if (tr) openLead(tr.dataset.id);
+  });
+  $("lead-rows").addEventListener("keydown", (e) => {
+    const tr = e.target.closest("tr[data-id]");
+    if (tr && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      openLead(tr.dataset.id);
+    }
+  });
+
+  const EXPORT_FIELDS = ["id", "company", "address", "city", "county", "state", "zip", "industry",
+    "employees", "website", "email", "email_status", "phone", "contact_name", "contact_title",
+    "region", "segment", "products", "target_titles", "triggers", "fit_score", "stage", "source", "notes"];
+
+  $("export-filtered").addEventListener("click", () => {
+    const list = filteredLeads();
+    if (!list.length) return;
+    const lines = [EXPORT_FIELDS.join(",")];
+    for (const l of list) {
+      const titles = (l.products || []).flatMap((p) => PRODUCTS[p].titles);
+      lines.push([
+        l.id, l.company, l.address, l.city, l.county, l.state, l.zip, l.industry, l.employees,
+        l.website, l.email, l.emailStatus, l.phone, l.contactName, l.contactTitle,
+        REGIONS[l.region], SEGMENTS[l.segment].label,
+        (l.products || []).map((p) => PRODUCTS[p].label).join("; "),
+        [...new Set(titles)].join("; "),
+        Object.keys(l.triggers || {}).filter((k) => l.triggers[k]).map((k) => TRIGGERS[k]).join("; "),
+        l.score, STAGES[l.stage], l.source, l.notes,
+      ].map(csvCell).join(","));
+    }
+    const blob = new Blob([lines.join("\r\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `prospects-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  $("delete-filtered").addEventListener("click", () => {
+    const list = filteredLeads();
+    if (!list.length) return;
+    if (!confirm(`Permanently delete the ${list.length} leads currently shown? Export first if you want a backup.`)) return;
+    const ids = new Set(list.map((l) => l.id));
+    state.leads = state.leads.filter((l) => !ids.has(l.id));
+    if (ids.has(openId)) closeLead();
+    save();
+    renderAll();
+  });
+
+  $("add-lead").addEventListener("click", () => {
+    const now = new Date().toISOString();
+    const lead = normalizeLead({ id: newId(), company: "New lead", source: "Manual", created: now, updated: now });
+    state.leads.push(lead);
+    save();
+    renderAll();
+    openLead(lead.id);
+    $("lead-form").elements.company.select();
+  });
+
+  // --- Lead detail ----------------------------------------------------------
+
+  const form = $("lead-form");
+  fillSelect(form.elements.region, REGIONS);
+  fillSelect(form.elements.segment, segmentLabels);
+  fillSelect(form.elements.stage, STAGES);
+
+  function checkboxGroup(container, options, name) {
+    container.replaceChildren();
+    for (const [key, label] of Object.entries(options)) {
+      const lab = document.createElement("label");
+      lab.className = "check";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.name = name;
+      box.value = key;
+      lab.append(box, " " + (typeof label === "string" ? label : label.label));
+      container.append(lab);
+    }
+  }
+  checkboxGroup($("d-products"), PRODUCTS, "products");
+  checkboxGroup($("d-triggers"), TRIGGERS, "triggers");
+
+  const TEXT_FIELDS = ["company", "website", "address", "city", "county", "state", "zip", "industry",
+    "employees", "phone", "region", "segment", "contactName", "contactTitle", "email", "emailStatus",
+    "stage", "source", "notes"];
+
+  function readForm() {
+    const draft = {};
+    for (const f of TEXT_FIELDS) draft[f] = form.elements[f].value.trim();
+    draft.state = draft.state.toUpperCase();
+    draft.email = draft.email.toLowerCase();
+    draft.employees = draft.employees === "" ? "" : Number(draft.employees);
+    draft.products = [...form.querySelectorAll("input[name=products]:checked")].map((b) => b.value);
+    draft.triggers = Object.fromEntries(
+      [...form.querySelectorAll("input[name=triggers]")].map((b) => [b.value, b.checked])
+    );
+    return draft;
+  }
+
+  function openLead(id) {
+    const lead = state.leads.find((l) => l.id === id);
+    if (!lead) return;
+    openId = id;
+    for (const f of TEXT_FIELDS) form.elements[f].value = lead[f] ?? "";
+    form.querySelectorAll("input[name=products]").forEach((b) => (b.checked = (lead.products || []).includes(b.value)));
+    form.querySelectorAll("input[name=triggers]").forEach((b) => (b.checked = !!(lead.triggers || {})[b.value]));
+    $("d-title").textContent = lead.company;
+    $("d-status").textContent = "";
+    $("lead-detail").hidden = false;
+    refreshDetailHints();
+    renderTable();
+    $("lead-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function closeLead() {
+    openId = null;
+    $("lead-detail").hidden = true;
+    renderTable();
+  }
+
+  function warningsFor(draft) {
+    const w = [];
+    if (draft.email && isConsumerEmail(draft.email)) {
+      w.push("Consumer email domain — this can't be saved. Use a business address (info@, sales@, or the decision-maker's work email).");
+    }
+    if (["contacted", "qualified"].includes(draft.stage) && draft.email && draft.emailStatus !== "valid") {
+      w.push("Email isn't verified as valid. Run it through ZeroBounce/NeverBounce before sending to protect domain health.");
+    }
+    if (draft.emailStatus === "invalid" && draft.stage === "contacted") {
+      w.push("This address was verified invalid — don't send to it.");
+    }
+    if (sizeBand(draft) === "out") {
+      w.push("Headcount is outside 20–500: smaller firms rarely buy structured programs; larger ones often have national contracts locked in.");
+    }
+    if (draft.region === "other") w.push("Outside the four target regions.");
+    return w;
+  }
+
+  function draftEmail(d) {
+    const first = (d.contactName || "").split(/\s+/)[0];
+    // Lead with the product line the contact's title owns, and keep the pitch to two lines.
+    const title = (d.contactTitle || "").toLowerCase();
+    const owns = (p) => PRODUCTS[p].titles.some((t) =>
+      t.toLowerCase().split(/[\s/()]+/).some((w) => w.length > 4 && title.includes(w)));
+    const products = d.products.length ? [...d.products] : ["janitorial"];
+    products.sort((a, b) => owns(b) - owns(a));
+    const pitches = products.slice(0, 2).map((p) => PRODUCTS[p].pitch);
+    const pitchText = pitches.join(" and ");
+    const place = {
+      philadelphia: d.city && d.city.toLowerCase() !== "philadelphia" ? `${d.city} and the Philadelphia area` : "Philadelphia",
+      lehigh: "the Lehigh Valley",
+      lancaster: "Lancaster County",
+      nj: d.city ? `${d.city}, NJ` : "South Jersey",
+      other: d.city || "your area",
+    }[d.region] || "your area";
+
+    let hook;
+    if (d.triggers.newOffice) hook = `Congrats on the new location — I saw ${d.company} is expanding its footprint in ${place}.`;
+    else if (d.triggers.relocation) hook = `I saw ${d.company}'s headquarters move in the local business news — moves like that are usually when workstation, facilities and team apparel decisions all land at once.`;
+    else if (d.triggers.facilitiesHire) hook = `I noticed ${d.company} is hiring on the facilities/office side in ${place}.`;
+    else if (d.triggers.uniformedTeam) hook = `Your on-site team in ${place} is the face of ${d.company} every day.`;
+    else hook = `I work with ${(SEGMENTS[d.segment] || SEGMENTS.other).audience} across ${place}.`;
+
+    const subject = d.triggers.newOffice || d.triggers.relocation
+      ? `${d.company}'s new space in ${place}`
+      : `${pitches[0][0].toUpperCase() + pitches[0].slice(1)} costs for ${d.company}`;
+
+    return [
+      `Subject: ${subject}`,
+      "",
+      `Hi ${first || "there"},`,
+      "",
+      hook,
+      "",
+      `Office Basics helps local teams lower their ${pitchText} costs. We normally start with a free good/better/best cost comparison against what you buy today — often the savings come from switching formats rather than just price.`,
+      "",
+      `Would a 15-minute call next week make sense?`,
+      "",
+      "Best,",
+      "[Your name] · Office Basics · [Business mailing address]",
+      "",
+      `If you're not the person handling ${pitchText} at ${d.company}, just let me know — or reply "unsubscribe" and I won't contact you again.`,
+    ].join("\n");
+  }
+
+  function refreshDetailHints() {
+    const d = readForm();
+    const titles = [...new Set(d.products.flatMap((p) => PRODUCTS[p].titles))];
+    $("d-titles").textContent = titles.length ? `Target titles: ${titles.join(" · ")}` : "Select at least one product line.";
+    const w = warningsFor(d);
+    $("d-warning").hidden = !w.length;
+    $("d-warning").textContent = w.join(" ");
+    $("d-draft").value = draftEmail(d);
+  }
+  form.addEventListener("input", refreshDetailHints);
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead) return;
+    const d = readForm();
+    if (d.email && isConsumerEmail(d.email)) {
+      refreshDetailHints();
+      form.elements.email.focus();
+      return;
+    }
+    Object.assign(lead, d, { updated: new Date().toISOString() });
+    lead.score = fitScore(lead);
+    save();
+    $("d-title").textContent = lead.company;
+    $("d-status").textContent = `Saved. Fit score ${lead.score}.`;
+    renderAll();
+  });
+
+  $("d-close").addEventListener("click", closeLead);
+  $("d-delete").addEventListener("click", () => {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead || !confirm(`Delete ${lead.company}?`)) return;
+    state.leads = state.leads.filter((l) => l.id !== openId);
+    save();
+    closeLead();
+    renderAll();
+  });
+
+  $("d-copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText($("d-draft").value);
+      $("d-status").textContent = "Draft copied.";
+    } catch (_) {
+      $("d-draft").select();
+    }
+  });
+
+  // --- Handoff to Cost Comparison --------------------------------------------
+
+  function showActiveLead() {
+    const lead = state.leads.find((l) => l.id === state.activeLeadId);
+    $("active-lead").hidden = !lead;
+    if (lead) $("active-lead-name").textContent = lead.company;
+  }
+
+  $("d-handoff").addEventListener("click", () => {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead) return;
+    const d = readForm();
+    if (d.email && isConsumerEmail(d.email)) {
+      refreshDetailHints();
+      return;
+    }
+    Object.assign(lead, d);
+    lead.score = fitScore(lead);
+    if (["new", "enriched", "verified", "contacted"].includes(lead.stage)) {
+      lead.stage = "qualified";
+      lead.updated = new Date().toISOString();
+      form.elements.stage.value = "qualified";
+    }
+    state.activeLeadId = lead.id;
+    save();
+    renderAll();
+    showActiveLead();
+    window.showTab("compare");
+    window.scrollTo({ top: 0 });
+  });
+
+  $("active-lead-back").addEventListener("click", () => {
+    window.showTab("prospecting");
+    if (state.activeLeadId) openLead(state.activeLeadId);
+  });
+
+  // --- Reference table --------------------------------------------------------
+
+  for (const p of Object.values(PRODUCTS)) {
+    const tr = document.createElement("tr");
+    for (const text of [p.label, p.titles.join(" · "), p.why]) {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.append(td);
+    }
+    $("title-map").append(tr);
+  }
+
+  state.leads.forEach((l) => (l.score = fitScore(l)));
+  renderAll();
+  showActiveLead();
+})();

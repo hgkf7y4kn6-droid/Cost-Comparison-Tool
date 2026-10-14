@@ -3,12 +3,218 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Basics Comparison</title>
+  <title>Office Basics Sales Hub</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <header class="app-header">
+    <h1>Office Basics Sales Hub</h1>
+    <nav class="tabs" role="tablist" aria-label="Sales cycle stages">
+      <button type="button" role="tab" id="tab-btn-prospecting" aria-controls="tab-prospecting" data-tab="prospecting">1. Prospecting</button>
+      <button type="button" role="tab" id="tab-btn-compare" aria-controls="tab-compare" data-tab="compare">2. Cost Comparison</button>
+    </nav>
+  </header>
+
   <main>
-    <h1>Office Basics Good / Better / Best Comparison</h1>
+  <!-- ===================== PROSPECTING TAB ===================== -->
+  <div id="tab-prospecting" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-prospecting" hidden>
+    <h2 class="panel-title">Prospecting — Philadelphia · New Jersey · Allentown · Lancaster</h2>
+    <p class="hint">Build a regional lead list from public, government-published business data, clean it, enrich it through a licensed B2B platform, then work it through the pipeline. Qualified leads hand off to the Cost Comparison tab.</p>
+
+    <!-- Pipeline overview -->
+    <div class="pipeline-bar" id="stage-counts" aria-live="polite"></div>
+
+    <!-- A. Playbook -->
+    <section>
+      <details id="playbook" open>
+        <summary><h2>A. Sourcing playbook</h2> <span class="muted" id="playbook-progress"></span></summary>
+        <p class="hint">Check steps off as you go — progress is saved in this browser.</p>
+        <ol class="playbook">
+          <li>
+            <label><input type="checkbox" data-step="pa-open-data"> <strong>Pull PA registrations</strong> (Allentown, Lancaster, Philadelphia)</label>
+            <p>Download the Department of State registered-businesses dataset from the <a href="https://data.pa.gov/browse?q=registered%20businesses" target="_blank" rel="noopener">PA Open Data Portal</a>. Filter County to <em>Lehigh</em>, <em>Northampton</em>, <em>Lancaster</em> and <em>Philadelphia</em>.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="philly-licenses"> <strong>Pull Philadelphia licenses</strong></label>
+            <p>Export the L&amp;I Business Licenses / Commercial Activity Licenses dataset from <a href="https://opendataphilly.org/" target="_blank" rel="noopener">OpenDataPhilly</a>.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="nj-open-data"> <strong>Pull NJ entities</strong></label>
+            <p>Search <a href="https://data.nj.gov/browse?q=business" target="_blank" rel="noopener">Open Data NJ</a> for active commercial entities in Camden, Burlington, Mercer and Gloucester counties. Expect entity names and industry tags, not contacts.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="geo-fence"> <strong>Geo-fence storefronts (optional)</strong></label>
+            <p>Use a rate-limited local-business scraper (<a href="https://outscraper.com/" target="_blank" rel="noopener">Outscraper</a>, <a href="https://phantombuster.com/" target="_blank" rel="noopener">PhantomBuster</a>, <a href="https://scrap.io/" target="_blank" rel="noopener">Scrap.io</a>). Draw polygons around the Route 22 / I-78 Lehigh Valley corridor and Lancaster City. Collect only what the merchant publishes: business phone, generic email (info@, sales@), storefront address.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="chambers"> <strong>Mine chamber member directories (B2B)</strong></label>
+            <p><a href="https://www.chamberphl.com/" target="_blank" rel="noopener">Greater Philadelphia Chamber</a>, <a href="https://www.lehighvalleychamber.org/" target="_blank" rel="noopener">Lehigh Valley Chamber</a>, <a href="https://www.lancasterchamber.com/" target="_blank" rel="noopener">Lancaster Chamber</a>. <strong>Check each site's <code>/robots.txt</code> first</strong> and skip any that disallow automated collection.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="import"> <strong>Import raw CSVs below</strong></label>
+            <p>Consumer emails are purged, duplicates merged, and out-of-territory rows dropped automatically.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="enrich"> <strong>Enrich (waterfall)</strong></label>
+            <p>Export the list, upload company names/domains to <a href="https://www.clay.com/" target="_blank" rel="noopener">Clay</a> or <a href="https://www.apollo.io/" target="_blank" rel="noopener">Apollo.io</a>, and match each company to the regional decision-maker (see title map below). Filter to 20–500 employees and look for intent triggers. <strong>Do not scrape individuals from corporate sites.</strong> Re-import the enriched file here — rows merge by ID / company.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="verify"> <strong>Verify emails</strong></label>
+            <p>Run the list through <a href="https://www.zerobounce.net/" target="_blank" rel="noopener">ZeroBounce</a> or <a href="https://neverbounce.com/" target="_blank" rel="noopener">NeverBounce</a> before any outreach and record the result on each lead (or include an <code>email_status</code> column on re-import).</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="outreach"> <strong>Outreach with local personalization + one-click opt-out</strong></label>
+            <p>Use the draft generator on each lead. Every email carries a clear opt-out line.</p>
+          </li>
+        </ol>
+      </details>
+    </section>
+
+    <!-- B. Import -->
+    <section>
+      <h2>B. Import leads</h2>
+      <p class="hint">CSV from any of the sources above, or a re-import of an enriched export. Recognized columns (any order, flexible names): company / business name, address, city, county, state, zip, industry, employees, website, email, phone, contact_name, contact_title, email_status, source. See <a href="prospects_template.csv" download>prospects_template.csv</a>.</p>
+      <form id="lead-import-form">
+        <input type="file" id="lead-file" accept=".csv,text/csv" required>
+        <input type="text" id="lead-source" placeholder="Source label (e.g. PA DOS registry, OpenDataPhilly, Lancaster Chamber)">
+        <label class="check"><input type="checkbox" id="skip-out-of-territory" checked> Drop rows outside Philadelphia / NJ / Lehigh Valley / Lancaster</label>
+        <label class="check"><input type="checkbox" id="skip-headcount"> Drop rows whose known headcount is outside 20–500</label>
+        <button type="submit" class="btn blue">Import Leads</button>
+      </form>
+      <div id="import-report" class="notice" hidden aria-live="polite"></div>
+      <p id="import-error" class="status err" aria-live="assertive"></p>
+    </section>
+
+    <!-- C. Pipeline -->
+    <section>
+      <h2>C. Lead pipeline</h2>
+      <div class="filters">
+        <input type="search" id="f-search" placeholder="Search company, city, contact…" aria-label="Search leads">
+        <select id="f-region" aria-label="Filter by region"><option value="">All regions</option></select>
+        <select id="f-segment" aria-label="Filter by segment"><option value="">All segments</option></select>
+        <select id="f-stage" aria-label="Filter by stage"><option value="">All stages</option></select>
+        <select id="f-size" aria-label="Filter by headcount">
+          <option value="">Any headcount</option>
+          <option value="in">20–500 employees</option>
+          <option value="unknown">Headcount unknown</option>
+          <option value="out">Outside 20–500</option>
+        </select>
+        <select id="f-sort" aria-label="Sort leads">
+          <option value="score">Sort: fit score</option>
+          <option value="company">Sort: company</option>
+          <option value="updated">Sort: recently updated</option>
+        </select>
+      </div>
+      <div class="toolbar">
+        <span id="lead-count" class="muted"></span>
+        <button type="button" class="btn small" id="add-lead">+ Add lead</button>
+        <button type="button" class="btn small" id="export-filtered">Export shown (CSV)</button>
+        <button type="button" class="btn small danger" id="delete-filtered">Delete shown</button>
+      </div>
+      <div class="table-wrap">
+        <table class="leads">
+          <thead>
+            <tr><th>Fit</th><th>Company</th><th>Region</th><th>Segment</th><th>Employees</th><th>Contact</th><th>Email</th><th>Stage</th></tr>
+          </thead>
+          <tbody id="lead-rows"></tbody>
+        </table>
+      </div>
+      <p id="empty-leads" class="hint">No leads yet — import a CSV or add one manually.</p>
+    </section>
+
+    <!-- D. Lead detail -->
+    <section id="lead-detail" hidden>
+      <h2>D. Lead detail — <span id="d-title"></span></h2>
+      <form id="lead-form" class="grid-form">
+        <label>Company <input type="text" name="company" required></label>
+        <label>Website / domain <input type="text" name="website"></label>
+        <label>Address <input type="text" name="address"></label>
+        <label>City <input type="text" name="city"></label>
+        <label>County <input type="text" name="county"></label>
+        <label>State <input type="text" name="state" maxlength="2"></label>
+        <label>ZIP <input type="text" name="zip"></label>
+        <label>Industry <input type="text" name="industry"></label>
+        <label>Employees <input type="number" name="employees" min="0"></label>
+        <label>Phone <input type="text" name="phone"></label>
+        <label>Region <select name="region"></select></label>
+        <label>Segment <select name="segment"></select></label>
+        <label>Contact name <input type="text" name="contactName"></label>
+        <label>Contact title <input type="text" name="contactTitle"></label>
+        <label>Email <input type="email" name="email"></label>
+        <label>Email verification
+          <select name="emailStatus">
+            <option value="unverified">Unverified</option>
+            <option value="valid">Valid</option>
+            <option value="catch-all">Catch-all / risky</option>
+            <option value="invalid">Invalid</option>
+          </select>
+        </label>
+        <label>Stage <select name="stage"></select></label>
+        <label>Source <input type="text" name="source"></label>
+
+        <fieldset class="span-2">
+          <legend>Product interest</legend>
+          <div id="d-products" class="checks"></div>
+          <p class="hint" id="d-titles"></p>
+        </fieldset>
+        <fieldset class="span-2">
+          <legend>Intent triggers (from enrichment / public news)</legend>
+          <div id="d-triggers" class="checks"></div>
+        </fieldset>
+        <label class="span-2">Notes <textarea name="notes" rows="3"></textarea></label>
+
+        <div class="span-2 row-buttons">
+          <button type="submit" class="btn green">Save Lead</button>
+          <button type="button" class="btn purple" id="d-handoff">Start Cost Comparison →</button>
+          <button type="button" class="btn small danger" id="d-delete">Delete lead</button>
+          <button type="button" class="btn small" id="d-close">Close</button>
+        </div>
+      </form>
+      <p id="d-warning" class="notice" hidden></p>
+      <p id="d-status" class="status ok" aria-live="polite"></p>
+
+      <h3>Outreach draft</h3>
+      <p class="hint">Personalized to the lead's local footprint and product interest. Always keep the opt-out line.</p>
+      <textarea id="d-draft" rows="11" readonly></textarea>
+      <button type="button" class="btn small" id="d-copy">Copy draft</button>
+    </section>
+
+    <!-- E. Reference -->
+    <section>
+      <details>
+        <summary><h2>E. Targeting reference</h2></summary>
+        <h3>Priority industries</h3>
+        <ul>
+          <li><strong>Healthcare networks &amp; medical groups</strong> — scrubs/uniforms, heavy janitorial, admin furniture (e.g. Penn Medicine, Lehigh Valley Health Network, Penn State Health).</li>
+          <li><strong>Corporate &amp; professional services</strong> — workstations, branded apparel, office supplies (Center City financial hubs, Cherry Hill tech, Route 22 corporate parks).</li>
+          <li><strong>Property management &amp; CRE</strong> — high-volume janitorial; first to know about tenant move-ins needing furniture.</li>
+          <li><strong>Hospitality, distribution &amp; light manufacturing</strong> — durable uniforms, industrial cleaning, warehouse office desks (Lehigh Valley and Lancaster corridors).</li>
+        </ul>
+        <h3>Decision-maker title map</h3>
+        <div class="table-wrap">
+          <table class="ref">
+            <thead><tr><th>What you sell</th><th>Titles to target</th><th>Why</th></tr></thead>
+            <tbody id="title-map"></tbody>
+          </table>
+        </div>
+        <h3>Compliance</h3>
+        <ul>
+          <li>CAN-SPAM permits B2B cold email to business addresses when the offer is relevant to their operations — include your physical address and an honored one-click opt-out.</li>
+          <li>Never email consumer accounts (gmail, yahoo, etc.); they're purged on import and blocked on save.</li>
+          <li>Verify every address before sending to protect domain health.</li>
+          <li>Respect <code>robots.txt</code> and site Terms; prefer government open data and licensed enrichment over scraping company sites.</li>
+        </ul>
+      </details>
+    </section>
+  </div>
+
+  <!-- ===================== COST COMPARISON TAB ===================== -->
+  <div id="tab-compare" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-compare" hidden>
+    <h2 class="panel-title">Good / Better / Best Comparison</h2>
+    <div id="active-lead" class="notice" hidden>
+      Working on: <strong id="active-lead-name"></strong>
+      <button type="button" class="link-btn" id="active-lead-back">← Back to lead</button>
+    </div>
 
     <!-- Step 1: catalog -->
     <section>
@@ -88,9 +294,12 @@
         <a id="spend-summary-link" class="btn blue" target="_blank" rel="noopener">Download Executive Summary (.docx)</a>
       </div>
     </section>
+  </div>
   </main>
 
   <script src="config.js"></script>
+  <script src="tabs.js"></script>
   <script src="app.js"></script>
+  <script src="prospecting.js"></script>
 </body>
 </html>

@@ -14,6 +14,33 @@ Because a case of c-fold towels, multifold towels, and roll towels all contain
 different unit counts, price alone isn't a fair comparison — the report
 normalizes to **cost per use** whenever `uses_per_case` is available.
 
+## Sales Hub tabs
+The frontend is organized as a sales-cycle system, one tab per stage:
+1. **Prospecting** (`frontend/prospecting.js`) — ethical regional lead sourcing
+   for Philadelphia, New Jersey, Allentown/Lehigh Valley and Lancaster:
+   - Sourcing playbook checklist (PA Open Data, OpenDataPhilly, Open Data NJ,
+     geo-fenced local scrapers, chamber directories, Clay/Apollo enrichment,
+     ZeroBounce/NeverBounce verification).
+   - CSV import with flexible column names (see `frontend/prospects_template.csv`).
+     On import, consumer emails (gmail, yahoo, …) are purged, duplicates are
+     merged, and region is derived from county → ZIP → city; out-of-territory
+     and out-of-range (20–500 employees) rows can be dropped.
+   - Re-importing an enriched/verified export merges by `id` or company, filling
+     in contacts, headcount and `email_status` and advancing the stage.
+   - Pipeline table (New → Enriched → Verified → Contacted → Qualified /
+     Disqualified) with filters, a 0–100 fit score (territory, headcount,
+     segment, verified email, contact, intent triggers) and CSV export.
+   - Lead detail with product-interest → decision-maker title mapping,
+     intent triggers, compliance warnings, and a localized outreach draft with
+     an opt-out line.
+   - **Start Cost Comparison →** marks the lead Qualified and opens tab 2 with
+     the lead shown as the active account.
+2. **Cost Comparison** — the good/better/best tool described below.
+
+Prospecting data is stored in the browser's `localStorage` (per browser, per
+device). Use **Export shown (CSV)** to back up or share; moving leads to a
+backend database is the next step for team-wide use.
+
 ## Project layout
 - `backend.py` — FastAPI backend (CLIP + FAISS matching, OCR, report generation).
   Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`).
