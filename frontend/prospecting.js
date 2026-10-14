@@ -1,8 +1,8 @@
 // Prospecting tab: import, clean, score and work regional B2B leads.
-// Leads live in this browser's localStorage (export CSV to back up or share).
+// Leads live in the shared SalesHub store (store.js); export CSV to back up or share.
 (function () {
   const $ = (id) => document.getElementById(id);
-  const STORE_KEY = "ob.prospecting.v1";
+  const hub = window.SalesHub;
 
   // --- Reference data -------------------------------------------------------
 
@@ -129,6 +129,8 @@
     verified: "Verified",
     contacted: "Contacted",
     qualified: "Qualified",
+    proposal: "Proposal sent",
+    won: "Won",
     disqualified: "Disqualified",
   };
 
@@ -145,24 +147,11 @@
 
   // --- Storage --------------------------------------------------------------
 
-  let state = { leads: [], playbook: {} };
+  const state = hub.state;
+  const save = hub.save;
   let openId = null; // lead shown in the detail panel
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (saved && Array.isArray(saved.leads)) state = { playbook: {}, ...saved };
-  } catch (_) {
-    // storage unavailable or corrupt — start empty
-  }
 
-  function save() {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(state));
-    } catch (_) {
-      // private mode / quota — the session still works, it just won't persist
-    }
-  }
-
-  const newId = () => "L" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const newId = () => hub.newId("L");
 
   // --- Lead helpers ---------------------------------------------------------
 
@@ -258,11 +247,6 @@
     if (row.some((v) => v.trim() !== "")) rows.push(row);
     return rows;
   }
-
-  const csvCell = (v) => {
-    const s = v === undefined || v === null ? "" : String(v);
-    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
 
   // Header aliases, matched after lowercasing and stripping non-alphanumerics.
   // Earlier aliases win, so specific names beat generic ones like "name".
@@ -581,10 +565,9 @@
   $("export-filtered").addEventListener("click", () => {
     const list = filteredLeads();
     if (!list.length) return;
-    const lines = [EXPORT_FIELDS.join(",")];
-    for (const l of list) {
+    const rows = list.map((l) => {
       const titles = (l.products || []).flatMap((p) => PRODUCTS[p].titles);
-      lines.push([
+      return [
         l.id, l.company, l.address, l.city, l.county, l.state, l.zip, l.industry, l.employees,
         l.website, l.email, l.emailStatus, l.phone, l.contactName, l.contactTitle,
         REGIONS[l.region], SEGMENTS[l.segment].label,
@@ -592,14 +575,9 @@
         [...new Set(titles)].join("; "),
         Object.keys(l.triggers || {}).filter((k) => l.triggers[k]).map((k) => TRIGGERS[k]).join("; "),
         l.score, STAGES[l.stage], l.source, l.notes,
-      ].map(csvCell).join(","));
-    }
-    const blob = new Blob([lines.join("\r\n")], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `prospects-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      ];
+    });
+    hub.downloadCsv(`prospects-${hub.today()}.csv`, EXPORT_FIELDS, rows);
   });
 
   $("delete-filtered").addEventListener("click", () => {
@@ -828,6 +806,19 @@
     window.scrollTo({ top: 0 });
   });
 
+  $("d-quote").addEventListener("click", () => {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead) return;
+    const d = readForm();
+    if (!(d.email && isConsumerEmail(d.email))) {
+      Object.assign(lead, d);
+      lead.score = fitScore(lead);
+    }
+    if (["new", "enriched", "verified", "contacted"].includes(lead.stage)) lead.stage = "qualified";
+    state.activeLeadId = lead.id;
+    hub.quotes.newForLead(lead.id);
+  });
+
   $("active-lead-back").addEventListener("click", () => {
     window.showTab("prospecting");
     if (state.activeLeadId) openLead(state.activeLeadId);
@@ -844,6 +835,23 @@
     }
     $("title-map").append(tr);
   }
+
+  // --- Shared with the other tabs ---------------------------------------------
+
+  Object.assign(hub.ref, { REGIONS, SEGMENTS, PRODUCTS, STAGES, regionFor });
+  hub.openLead = (id) => {
+    window.showTab("prospecting");
+    openLead(id);
+  };
+
+  // Quotes/accounts can move a lead's stage; keep the table and open form in sync.
+  hub.on(() => {
+    renderAll();
+    showActiveLead();
+    const lead = openId && state.leads.find((l) => l.id === openId);
+    if (lead) form.elements.stage.value = lead.stage;
+    else if (openId) closeLead();
+  });
 
   state.leads.forEach((l) => (l.score = fitScore(l)));
   renderAll();

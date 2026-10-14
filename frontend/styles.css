@@ -42,7 +42,7 @@ input[type="file"] {
   padding: 1.2em;
   width: 100%;
 }
-input[type="text"], input[type="number"], input[type="email"], input[type="search"], select, textarea {
+input[type="text"], input[type="number"], input[type="email"], input[type="search"], input[type="date"], select, textarea {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.5em 0.6em;
@@ -201,3 +201,76 @@ td .warn { color: #b7791f; font-weight: 600; }
 textarea { resize: vertical; font-family: inherit; }
 #d-draft { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85em; background: #f7fafc; }
 table.ref td:first-child { font-weight: 600; white-space: nowrap; }
+
+/* ---------- Shared: KPI tiles, lists ---------- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.5em; margin: 0.8em 0; }
+.kpi { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; padding: 0.6em 0.8em; background: #fff; }
+.kpi span { font-size: 0.75em; }
+.kpi strong { font-size: 1.35em; }
+.kpi small { font-size: 0.75em; }
+.kpis.small .kpi strong { font-size: 1.1em; }
+.num { text-align: right; white-space: nowrap; }
+.warn { color: #b7791f; font-weight: 600; }
+.danger-text { color: var(--err); }
+ul.plain { list-style: none; padding: 0; margin: 0.3em 0; }
+ul.plain li { padding: 0.2em 0; font-size: 0.9em; }
+
+/* ---------- Quotes ---------- */
+.qs-draft { background: #edf2f7; }
+.qs-sent { background: #bee3f8; }
+.qs-negotiating { background: #fefcbf; }
+.qs-won { background: #c6f6d5; }
+.qs-lost, .qs-expired { background: #fed7d7; }
+#qe-badge .stage { font-size: 0.7em; vertical-align: middle; }
+
+table.lines td { padding: 0.25em; }
+table.lines input, table.lines select { padding: 0.3em; font-size: 0.95em; min-width: 4.5em; }
+table.lines input[data-field="name"] { min-width: 14em; }
+table.lines input[data-field="sku"] { min-width: 7em; }
+table.lines input[type="checkbox"] { min-width: 0; width: auto; }
+table.lines td.ext { vertical-align: middle; font-weight: 600; }
+
+.totals { display: flex; flex-direction: column; align-items: flex-end; gap: 0.15em; font-size: 0.9em; }
+.totals div { display: flex; gap: 1.5em; justify-content: space-between; min-width: min(100%, 360px); }
+.totals .grand { border-top: 1px solid var(--border); padding-top: 0.2em; font-size: 1.1em; }
+.totals .good strong { color: var(--ok); }
+
+.to-quote { display: flex; gap: 0.5em; align-items: center; }
+.to-quote select { flex: 1; }
+.to-quote .btn { width: auto; flex: 1; }
+
+/* ---------- Accounts ---------- */
+.as-onboarding { background: #bee3f8; }
+.as-active { background: #c6f6d5; }
+.as-at-risk { background: #fefcbf; }
+.as-churned { background: #fed7d7; }
+.coverage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.5em; margin-bottom: 1em; }
+.coverage { border: 1px solid var(--border); border-radius: 8px; padding: 0.6em; font-size: 0.9em; }
+.coverage.has { background: #f0fff4; border-color: #9ae6b4; }
+.coverage.gap { background: #fffaf0; border-style: dashed; }
+.coverage .sub { font-size: 0.85em; color: var(--muted); margin: 0.2em 0; }
+.timeline { list-style: none; padding: 0; margin: 0.6em 0; border-left: 2px solid var(--border); }
+.timeline li { padding: 0.3em 0 0.5em 0.8em; font-size: 0.9em; }
+.timeline .muted { font-size: 0.85em; }
+
+/* ---------- Printable proposal ---------- */
+#proposal-print { display: none; }
+@media print {
+  body.print-proposal > *:not(#proposal-print) { display: none !important; }
+  body.print-proposal #proposal-print { display: block; color: #000; font-size: 11pt; }
+  #proposal-print header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 0.5em; margin-bottom: 1em; }
+  #proposal-print h1 { text-align: left; margin: 0; font-size: 20pt; }
+  #proposal-print h2 { margin: 0; font-size: 14pt; }
+  #proposal-print h3 { font-size: 10pt; text-transform: uppercase; letter-spacing: 0.05em; color: #444; margin: 1em 0 0.2em; }
+  #proposal-print .right { text-align: right; }
+  #proposal-print .parties { display: flex; gap: 3em; }
+  #proposal-print table { font-size: 10pt; margin: 1em 0; }
+  #proposal-print th { background: #eee; }
+  #proposal-print .savings { border: 1px solid #000; padding: 0.5em; }
+  #proposal-print .totals { font-size: 10.5pt; }
+  #proposal-print .sign { display: flex; gap: 2em; margin-top: 3em; font-size: 9pt; }
+  #proposal-print .sign > div { flex: 1; }
+  #proposal-print .sign .line { border-bottom: 1px solid #000; height: 2.5em; }
+  #proposal-print .sub { font-size: 8.5pt; color: #555; }
+  #proposal-print tr { break-inside: avoid; }
+}

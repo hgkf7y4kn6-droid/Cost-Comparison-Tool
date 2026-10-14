@@ -115,6 +115,8 @@ $("compare-form").addEventListener("submit", (e) => {
       $("match-source").textContent =
         c.source === "learned" ? "Learned from a confirmed match" : "Algorithmic match";
       renderTiers(c.tiers || {});
+      window.SalesHub.state.lastComparison = c;
+      window.SalesHub.save();
 
       const lookup = c.manual_lookup;
       $("manual-lookup").hidden = !lookup;
@@ -180,4 +182,9 @@ $("spend-form").addEventListener("submit", (e) => {
       $("spend-error").textContent = err.message;
     }
   });
+});
+
+// --- Hand the comparison to the Proposals & Quotes tab ---
+$("to-quote-btn").addEventListener("click", () => {
+  $("to-quote-error").textContent = window.SalesHub.quotes.addComparisonTier($("to-quote-tier").value) || "";
 });

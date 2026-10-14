@@ -35,10 +35,37 @@ The frontend is organized as a sales-cycle system, one tab per stage:
      an opt-out line.
    - **Start Cost Comparison →** marks the lead Qualified and opens tab 2 with
      the lead shown as the active account.
-2. **Cost Comparison** — the good/better/best tool described below.
+2. **Cost Comparison** — the good/better/best tool described below. After a
+   comparison, **Add to quote →** puts the chosen tier on the active lead's
+   draft quote, with the competitor's price as the "current price" (scaled to
+   cost-per-use when uses-per-case is known on both sides).
+3. **Proposals & Quotes** (`frontend/quotes.js`) — quotes for qualified leads
+   or existing accounts:
+   - Line items with product line, tier, quantity, unit price, the customer's
+     current price, and frequency (one-time vs. monthly/quarterly/annual), so
+     recurring janitorial restock and one-time furniture installs are valued
+     separately.
+   - Discount, delivery, and sales tax defaulted from the customer's location
+     (Philadelphia 8%, rest of PA 6%, NJ 6.625%; apparel lines default to
+     non-taxable; tax-exempt toggle). Confirm rates per deal.
+   - Totals: order total, annual recurring value, one-time value, and
+     estimated annual savings vs. current pricing.
+   - **Print / Save PDF** produces a customer-facing proposal with a savings
+     callout, terms and an acceptance block.
+   - Status Draft → Sent → Negotiating → Won / Lost (with loss reason);
+     quotes past their validity show as Expired. Sending moves the lead to
+     "Proposal sent"; winning moves it to "Won" and creates/updates the account.
+   - KPIs: open pipeline, won recurring value, win rate, average days to close.
+4. **Accounts** (`frontend/accounts.js`) — customers from won quotes (or added
+   by hand): status (Onboarding / Active / At risk / Churned), owner, contacts,
+   renewal date, next action, and an activity log. Shows recurring and one-time
+   value and savings delivered from won quotes, product-line coverage with
+   cross-sell gaps (and who to talk to), follow-ups due this week, accounts
+   with no touch in 60+ days, and renewals within 90 days.
 
-Prospecting data is stored in the browser's `localStorage` (per browser, per
-device). Use **Export shown (CSV)** to back up or share; moving leads to a
+All Sales Hub data (leads, quotes, accounts) is stored in the browser's
+`localStorage` via `frontend/store.js` — per browser, per device. Use each
+tab's **Export shown (CSV)** to back up or share; moving this data to a
 backend database is the next step for team-wide use.
 
 ## Project layout

@@ -12,6 +12,8 @@
     <nav class="tabs" role="tablist" aria-label="Sales cycle stages">
       <button type="button" role="tab" id="tab-btn-prospecting" aria-controls="tab-prospecting" data-tab="prospecting">1. Prospecting</button>
       <button type="button" role="tab" id="tab-btn-compare" aria-controls="tab-compare" data-tab="compare">2. Cost Comparison</button>
+      <button type="button" role="tab" id="tab-btn-quotes" aria-controls="tab-quotes" data-tab="quotes">3. Proposals &amp; Quotes</button>
+      <button type="button" role="tab" id="tab-btn-accounts" aria-controls="tab-accounts" data-tab="accounts">4. Accounts</button>
     </nav>
   </header>
 
@@ -166,6 +168,7 @@
         <div class="span-2 row-buttons">
           <button type="submit" class="btn green">Save Lead</button>
           <button type="button" class="btn purple" id="d-handoff">Start Cost Comparison →</button>
+          <button type="button" class="btn blue" id="d-quote">New quote →</button>
           <button type="button" class="btn small danger" id="d-delete">Delete lead</button>
           <button type="button" class="btn small" id="d-close">Close</button>
         </div>
@@ -251,6 +254,15 @@
           <a id="manual-lookup-link" target="_blank" rel="noopener">Open supplies.officebasics.com</a>
         </div>
         <a id="download-link" class="btn blue" target="_blank" rel="noopener" hidden>Download Cost Comparison (.xlsx)</a>
+        <div class="to-quote">
+          <select id="to-quote-tier" aria-label="Tier to add to quote">
+            <option value="best">BEST tier</option>
+            <option value="better">BETTER tier</option>
+            <option value="good">GOOD tier</option>
+          </select>
+          <button type="button" class="btn green" id="to-quote-btn">Add to quote →</button>
+        </div>
+        <p id="to-quote-error" class="status err" aria-live="assertive"></p>
 
         <hr>
         <p class="hint">Was this the right call? Correct any tier below and confirm so similar products are matched this way next time.</p>
@@ -295,11 +307,215 @@
       </div>
     </section>
   </div>
+
+  <!-- ===================== PROPOSALS & QUOTES TAB ===================== -->
+  <div id="tab-quotes" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-quotes" hidden>
+    <h2 class="panel-title">Proposals &amp; Quotes</h2>
+    <p class="hint">Build a quote for a qualified lead or an existing account, pull good/better/best lines straight from the Cost Comparison tab, show the customer their savings, print a proposal, and track it to won or lost. Winning a quote creates the account.</p>
+    <div class="kpis" id="q-kpis" aria-live="polite"></div>
+
+    <section>
+      <div class="filters">
+        <input type="search" id="q-f-search" placeholder="Search quote #, company, contact…" aria-label="Search quotes">
+        <select id="q-f-status" aria-label="Filter by status">
+          <option value="">All statuses</option>
+        </select>
+      </div>
+      <div class="toolbar">
+        <span id="q-count" class="muted"></span>
+        <button type="button" class="btn small" id="q-new">+ New quote</button>
+        <button type="button" class="btn small" id="q-export">Export shown (CSV)</button>
+      </div>
+      <div class="table-wrap">
+        <table class="leads">
+          <thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th class="num">Lines</th><th class="num">Order total</th><th class="num">First-year value</th><th class="num">Est. annual savings</th><th>Valid until</th></tr></thead>
+          <tbody id="q-rows"></tbody>
+        </table>
+      </div>
+      <p id="q-empty" class="hint">No quotes yet. Start one here, from a lead's detail panel (“New quote”), or from a cost comparison result (“Add to quote”).</p>
+    </section>
+
+    <section id="quote-editor" hidden>
+      <h2>Quote <span id="qe-number"></span> — <span id="qe-company"></span> <span id="qe-badge"></span></h2>
+      <p class="hint" id="qe-meta"></p>
+      <form id="quote-form" class="grid-form">
+        <label class="span-2">Customer <select name="customer"></select></label>
+        <label>Company name on proposal <input type="text" name="company"></label>
+        <label>Contact name <input type="text" name="contactName"></label>
+        <label>Contact title <input type="text" name="contactTitle"></label>
+        <label>Contact email <input type="email" name="email"></label>
+        <label>Valid for (days) <input type="number" name="validDays" min="1" step="1"></label>
+        <label>Payment terms <input type="text" name="terms" list="terms-options"></label>
+        <label>Delivery / installation ($) <input type="number" name="delivery" min="0" step="0.01"></label>
+        <label>Discount (%) <input type="number" name="discountPct" min="0" max="100" step="0.1"></label>
+        <label>Sales tax rate (%) <input type="number" name="taxRate" min="0" step="0.001"></label>
+        <label class="check"><input type="checkbox" name="taxExempt"> Customer is tax-exempt (certificate on file)</label>
+        <label>Status <select name="status"></select></label>
+        <label id="qe-loss-wrap" hidden>Loss reason <select name="lossReason"></select></label>
+        <p class="hint span-2">Tax rate defaults from the customer's location (Philadelphia 8%, rest of PA 6%, NJ 6.625%) and apparel lines default to non-taxable. Confirm rates and exemptions for each deal.</p>
+
+        <div class="span-2">
+          <h3>Line items</h3>
+          <div id="qe-from-comparison" class="notice" hidden>
+            <p>From your last cost comparison (<strong id="qe-comp-product"></strong>) — add a tier as a line; the competitor's price fills “current price” (normalized to cost-per-use when uses-per-case is known):</p>
+            <div class="row-buttons">
+              <button type="button" class="btn small" id="qe-add-good"></button>
+              <button type="button" class="btn small" id="qe-add-better"></button>
+              <button type="button" class="btn small" id="qe-add-best"></button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="lines">
+              <thead><tr><th>SKU</th><th>Description</th><th>Line</th><th>Tier</th><th>Qty</th><th>UOM</th><th>Frequency</th><th>Unit price</th><th>Current price</th><th>Tax</th><th class="num">Extended</th><th></th></tr></thead>
+              <tbody id="qe-lines"></tbody>
+            </table>
+          </div>
+          <p id="qe-no-lines" class="hint">No lines yet.</p>
+          <button type="button" class="btn small" id="qe-add-line">+ Add line</button>
+          <p class="hint">“Current price” is what the customer pays today for the equivalent item (per unit) — it drives the savings figure. Frequency annualizes recurring lines (e.g. monthly janitorial restock) separately from one-time lines (e.g. a furniture install).</p>
+        </div>
+
+        <div class="span-2 totals" id="qe-totals" aria-live="polite"></div>
+
+        <label class="span-2">Scope / notes (printed on the proposal) <textarea name="notes" rows="3"></textarea></label>
+
+        <div class="span-2 row-buttons">
+          <button type="submit" class="btn green">Save</button>
+          <button type="button" class="btn blue" id="qe-print">Print / Save PDF</button>
+          <button type="button" class="btn small" id="qe-mark-sent">Mark sent</button>
+          <button type="button" class="btn small" id="qe-mark-won">Mark won</button>
+          <button type="button" class="btn small" id="qe-mark-lost">Mark lost</button>
+          <button type="button" class="btn small" id="qe-duplicate">Duplicate</button>
+          <button type="button" class="btn small" id="qe-open-customer">Open customer</button>
+          <button type="button" class="btn small danger" id="qe-delete">Delete</button>
+          <button type="button" class="btn small" id="qe-close">Close</button>
+        </div>
+      </form>
+      <p id="qe-status" class="status ok" aria-live="polite"></p>
+      <datalist id="terms-options">
+        <option value="Net 30"><option value="Net 45"><option value="Net 60"><option value="Due on receipt"><option value="50% deposit, balance on install">
+      </datalist>
+    </section>
+
+    <section>
+      <details>
+        <summary><h2>Your details for proposals</h2></summary>
+        <form id="rep-profile" class="grid-form">
+          <label>Your name <input type="text" name="repName"></label>
+          <label>Email <input type="email" name="repEmail"></label>
+          <label>Phone <input type="text" name="repPhone"></label>
+          <label>Office Basics mailing address <input type="text" name="repAddress"></label>
+        </form>
+      </details>
+    </section>
+  </div>
+
+  <!-- ===================== ACCOUNTS TAB ===================== -->
+  <div id="tab-accounts" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-accounts" hidden>
+    <h2 class="panel-title">Accounts</h2>
+    <p class="hint">Customers created when a quote is won (or added by hand). Track recurring value and savings delivered, log every touch, keep a next action on each account, and spot cross-sell gaps and upcoming renewals.</p>
+    <div class="kpis" id="a-kpis" aria-live="polite"></div>
+
+    <div id="a-followups-wrap" class="notice" hidden>
+      <strong>Follow-ups due this week</strong>
+      <ul id="a-followups" class="plain"></ul>
+    </div>
+
+    <section>
+      <div class="filters">
+        <input type="search" id="a-f-search" placeholder="Search company, city, contact, owner…" aria-label="Search accounts">
+        <select id="a-f-status" aria-label="Filter accounts">
+          <option value="">All accounts</option>
+          <option value="stale">No touch in 60+ days</option>
+          <option value="renewal">Renewal within 90 days</option>
+        </select>
+        <select id="a-f-sort" aria-label="Sort accounts">
+          <option value="value">Sort: annual value</option>
+          <option value="next">Sort: next action date</option>
+          <option value="renewal">Sort: renewal date</option>
+          <option value="company">Sort: company</option>
+        </select>
+      </div>
+      <div class="toolbar">
+        <span id="a-count" class="muted"></span>
+        <button type="button" class="btn small" id="a-new">+ Add account</button>
+        <button type="button" class="btn small" id="a-export">Export shown (CSV)</button>
+      </div>
+      <div class="table-wrap">
+        <table class="leads">
+          <thead><tr><th>Account</th><th>Region</th><th>Status</th><th>Buying</th><th class="num">Annual recurring</th><th>Last touch</th><th>Next action</th><th>Renewal</th></tr></thead>
+          <tbody id="a-rows"></tbody>
+        </table>
+      </div>
+      <p id="a-empty" class="hint">No accounts yet — mark a quote won, or add one manually.</p>
+    </section>
+
+    <section id="account-detail" hidden>
+      <h2>Account — <span id="ad-title"></span></h2>
+      <div class="kpis small" id="ad-kpis"></div>
+
+      <h3>Product-line coverage</h3>
+      <div id="ad-coverage" class="coverage-grid"></div>
+
+      <form id="account-form" class="grid-form">
+        <label>Company <input type="text" name="company" required></label>
+        <label>Status <select name="status"></select></label>
+        <label>Account owner <input type="text" name="owner"></label>
+        <label>Locations served <input type="number" name="locations" min="1" step="1"></label>
+        <label>Primary contact <input type="text" name="contactName"></label>
+        <label>Title <input type="text" name="contactTitle"></label>
+        <label>Email <input type="email" name="email"></label>
+        <label>Phone <input type="text" name="phone"></label>
+        <label>Address <input type="text" name="address"></label>
+        <label>City <input type="text" name="city"></label>
+        <label>State <input type="text" name="state" maxlength="2"></label>
+        <label>ZIP <input type="text" name="zip"></label>
+        <label>Payment terms <input type="text" name="terms" list="terms-options"></label>
+        <label>Customer since <input type="date" name="startDate"></label>
+        <label>Renewal / pricing review <input type="date" name="renewalDate"></label>
+        <label>Next action <input type="text" name="nextAction"></label>
+        <label>Next action due <input type="date" name="nextActionDate"></label>
+        <label class="span-2">Other contacts (HR, facilities, AP…) <textarea name="otherContacts" rows="2"></textarea></label>
+        <label class="span-2">Notes <textarea name="notes" rows="2"></textarea></label>
+        <div class="span-2 row-buttons">
+          <button type="submit" class="btn green">Save Account</button>
+          <button type="button" class="btn purple" id="ad-new-quote">New quote for this account →</button>
+          <button type="button" class="btn small" id="ad-lead-link">Open original lead</button>
+          <button type="button" class="btn small danger" id="ad-delete">Delete account</button>
+          <button type="button" class="btn small" id="ad-close">Close</button>
+        </div>
+      </form>
+      <p id="ad-status" class="status ok" aria-live="polite"></p>
+
+      <h3>Quotes</h3>
+      <ul id="ad-quotes" class="plain"></ul>
+      <p id="ad-no-quotes" class="hint">No quotes linked to this account.</p>
+
+      <h3>Activity</h3>
+      <form id="act-form" class="grid-form">
+        <label>Type <select id="act-type"></select></label>
+        <label>Date <input type="date" id="act-date"></label>
+        <label class="span-2">What happened <input type="text" id="act-text" placeholder="e.g. Quarterly review with facilities — adding 2nd floor in Q1" required></label>
+        <label>Set next action (optional) <input type="text" id="act-next" placeholder="e.g. Send apparel samples"></label>
+        <label>Next action due <input type="date" id="act-next-date"></label>
+        <div class="span-2"><button type="submit" class="btn small">Log activity</button></div>
+      </form>
+      <ul id="ad-activity" class="timeline"></ul>
+      <p id="ad-no-activity" class="hint">No activity logged yet.</p>
+    </section>
+  </div>
+
   </main>
 
+  <!-- Filled in and shown only when printing a proposal -->
+  <div id="proposal-print" aria-hidden="true"></div>
+
   <script src="config.js"></script>
+  <script src="store.js"></script>
   <script src="tabs.js"></script>
   <script src="app.js"></script>
   <script src="prospecting.js"></script>
+  <script src="quotes.js"></script>
+  <script src="accounts.js"></script>
 </body>
 </html>
