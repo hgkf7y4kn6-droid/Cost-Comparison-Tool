@@ -14,8 +14,10 @@ import pandas as pd
 import pdfplumber
 import torch
 from docx import Document
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -24,6 +26,7 @@ from PIL import Image
 from pydantic import BaseModel
 from transformers import CLIPModel, CLIPProcessor
 
+import auth
 from table_extract import extract_sheets
 
 try:
@@ -243,6 +246,30 @@ def style_header_row(ws, row: int, ncols: int):
 # ==========================================
 app = FastAPI(title="Office Basics Good/Better/Best Comparison Engine")
 
+# Every endpoint except these requires a signed-in user (see auth.py).
+PUBLIC_PATHS = {"/health", "/auth/login"}
+authenticator = auth.from_environment()
+
+
+# Registered before CORSMiddleware so CORS stays the outer layer: preflights are
+# answered and 401s still carry CORS headers the browser can read.
+@app.middleware("http")
+async def require_sign_in(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+        return await call_next(request)
+    if not authenticator.configured:
+        return JSONResponse(
+            {"detail": "Sign-in isn't set up on the server yet (AUTH_USERS is empty)."}, status_code=503
+        )
+    header = request.headers.get("authorization", "")
+    token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    user = authenticator.verify_token(token) if token else None
+    if not user:
+        return JSONResponse({"detail": "Please sign in."}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
+    request.state.user = user["sub"]
+    return await call_next(request)
+
+
 # The frontend is served from a different origin (Cloudflare), so the browser
 # needs CORS. ALLOWED_ORIGINS is a comma-separated list, e.g.
 # "https://cost-comparison-tool.example.workers.dev"; "*" allows any origin.
@@ -414,6 +441,43 @@ async def upload_catalog(file: UploadFile = File(...)):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# ==========================================
+# 4b. SIGN-IN
+# ==========================================
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+def _client_ip(request: Request) -> str:
+    # Render's proxy appends the real client address as the last X-Forwarded-For entry.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.post("/auth/login")
+async def login(payload: LoginRequest, request: Request):
+    if not authenticator.configured:
+        raise HTTPException(503, "Sign-in isn't set up on the server yet (AUTH_USERS is empty).")
+    ip = _client_ip(request)
+    email = payload.email.strip().lower()
+    if authenticator.locked_out(email, ip):
+        raise HTTPException(429, "Too many failed sign-in attempts. Try again in 15 minutes.")
+    # PBKDF2 is deliberately slow; keep it off the event loop.
+    user = await run_in_threadpool(authenticator.login, email, payload.password, ip)
+    if not user:
+        raise HTTPException(401, "Email or password is incorrect.")
+    token, expires_at = authenticator.issue_token(user)
+    return {"token": token, "email": user, "expires_at": expires_at}
+
+
+@app.get("/auth/me")
+async def who_am_i(request: Request):
+    return {"email": request.state.user}
 
 
 @app.get("/catalog/status/")

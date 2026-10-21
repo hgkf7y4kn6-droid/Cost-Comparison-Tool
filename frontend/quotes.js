@@ -60,10 +60,22 @@
   // --- Math -----------------------------------------------------------------
 
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const hasValue = (v) => v !== "" && v !== undefined && v !== null;
+  const pct = (n) => `${n.toFixed(1)}%`;
+  const DEFAULT_TARGET_MARGIN = 30;
+  const targetMarginPct = () => num((state.settings || {}).targetMargin ?? DEFAULT_TARGET_MARGIN);
+
+  // Line cost and margin are internal: shown to the rep in the editor, list and
+  // exports, never on the printed proposal (see proposalHtml).
+  function lineMargin(l, disc) {
+    const sell = num(l.unitPrice) * disc;
+    return hasValue(l.cost) && sell > 0 ? ((sell - num(l.cost)) / sell) * 100 : null;
+  }
 
   function totals(q) {
     const disc = Math.min(100, Math.max(0, num(q.discountPct))) / 100;
     let subtotal = 0, taxableNet = 0, recurring = 0, oneTime = 0, savings = 0, currentSpend = 0;
+    let costedRevenue = 0, costTotal = 0, annualProfit = 0, missingCost = 0;
     for (const l of q.lines) {
       const ext = num(l.qty) * num(l.unitPrice);
       const net = ext * (1 - disc);
@@ -77,7 +89,17 @@
         currentSpend += current;
         savings += current - net * f.mult;
       }
+      if (hasValue(l.cost)) {
+        const cost = num(l.qty) * num(l.cost);
+        costedRevenue += net;
+        costTotal += cost;
+        annualProfit += (net - cost) * f.mult;
+      } else if (ext > 0) {
+        missingCost++;
+      }
     }
+    // Margin covers line revenue after discount; tax and delivery are excluded.
+    const grossProfit = costedRevenue - costTotal;
     const discount = subtotal * disc;
     const tax = q.taxExempt ? 0 : (taxableNet * num(q.taxRate)) / 100;
     const orderTotal = subtotal - discount + tax + num(q.delivery);
@@ -86,6 +108,8 @@
       firstYear: recurring + oneTime,
       savings, currentSpend,
       savingsPct: currentSpend > 0 ? (savings / currentSpend) * 100 : null,
+      costedRevenue, costTotal, grossProfit, annualProfit, missingCost,
+      marginPct: costedRevenue > 0 ? (grossProfit / costedRevenue) * 100 : null,
     };
   }
 
@@ -186,6 +210,7 @@
       freq: DEFAULT_FREQ[type],
       unitPrice: num(item.price),
       currentPrice: current,
+      cost: "",
       taxable: type !== "apparel",
       replaces: c.competitor_product || "",
     };
@@ -193,7 +218,7 @@
 
   function blankLine() {
     return { id: hub.newId("ln"), sku: "", name: "", type: "janitorial", tier: "", qty: 1, uom: "case",
-      freq: "month", unitPrice: 0, currentPrice: "", taxable: true, replaces: "" };
+      freq: "month", unitPrice: 0, currentPrice: "", cost: "", taxable: true, replaces: "" };
   }
 
   // --- List -----------------------------------------------------------------
@@ -240,8 +265,19 @@
       ["Won — annual recurring", money(sum(won, "recurring")), `${won.length} won · ${money(sum(won, "oneTime"))} one-time`],
       ["Win rate", won.length + lost.length ? `${Math.round((won.length / (won.length + lost.length)) * 100)}%` : "—", `${won.length} won / ${lost.length} lost`],
       ["Avg. days to close", closeDays.length ? Math.round(closeDays.reduce((a, b) => a + b, 0) / closeDays.length) : "—", "sent → won"],
+      ["Margin — open quotes", blendedMargin(open), `won: ${blendedMargin(won)} · target ${pct(targetMarginPct())}`],
     ];
     renderTiles($("q-kpis"), tiles);
+  }
+
+  function blendedMargin(list) {
+    let rev = 0, profit = 0;
+    for (const q of list) {
+      const t = totals(q);
+      rev += t.costedRevenue;
+      profit += t.grossProfit;
+    }
+    return rev > 0 ? pct((profit / rev) * 100) : "—";
   }
 
   function renderTiles(container, tiles) {
@@ -276,13 +312,16 @@
         money(t.orderTotal),
         money(t.firstYear),
         t.savings ? money(t.savings) : "—",
+        t.marginPct === null ? "—" : pct(t.marginPct) + (t.missingCost ? "*" : ""),
         hub.fmtDate(validUntil(q)),
       ];
       cells.forEach((text, i) => {
         const td = document.createElement("td");
         if (i === 2) td.append(statusBadge(q));
         else td.textContent = text;
-        if (i >= 3 && i <= 6) td.className = "num";
+        if (i >= 3 && i <= 7) td.className = "num";
+        if (i === 7 && t.marginPct !== null && t.marginPct < targetMarginPct()) td.className = "num warn";
+        if (i === 7 && t.missingCost) td.title = `Cost missing on ${t.missingCost} line(s)`;
         tr.append(td);
       });
       tbody.append(tr);
@@ -325,14 +364,18 @@
       for (const l of q.lines.length ? q.lines : [{}]) {
         rows.push([q.number, q.company, STATUSES[q.status], isExpired(q) ? "yes" : "", q.created.slice(0, 10),
           q.sentDate || "", q.decidedDate || "", l.sku, l.name, LINE_TYPES[l.type] || "", l.tier, l.qty, l.uom,
-          FREQS[l.freq] ? FREQS[l.freq].label : "", l.unitPrice, l.currentPrice, t.orderTotal.toFixed(2),
-          t.recurring.toFixed(2), t.oneTime.toFixed(2), t.savings.toFixed(2), q.lossReason]);
+          FREQS[l.freq] ? FREQS[l.freq].label : "", l.unitPrice, l.currentPrice, l.cost ?? "",
+          l.unitPrice !== undefined && lineMargin(l, 1 - num(q.discountPct) / 100) !== null
+            ? lineMargin(l, 1 - num(q.discountPct) / 100).toFixed(1) : "",
+          t.orderTotal.toFixed(2), t.recurring.toFixed(2), t.oneTime.toFixed(2), t.savings.toFixed(2),
+          t.marginPct === null ? "" : t.marginPct.toFixed(1), t.grossProfit.toFixed(2), q.lossReason]);
       }
     }
     hub.downloadCsv(`quotes-${hub.today()}.csv`,
       ["quote", "company", "status", "expired", "created", "sent", "decided", "sku", "description", "product_line",
-        "tier", "qty", "uom", "frequency", "unit_price", "current_price", "order_total", "annual_recurring",
-        "one_time", "annual_savings", "loss_reason"], rows);
+        "tier", "qty", "uom", "frequency", "unit_price", "current_price", "unit_cost", "line_margin_pct",
+        "order_total", "annual_recurring", "one_time", "annual_savings", "quote_margin_pct", "gross_profit_per_order",
+        "loss_reason"], rows);
   });
 
   // --- Editor ---------------------------------------------------------------
@@ -420,6 +463,7 @@
         ["uom", { label: "Unit of measure" }],
         ["freq", { label: "Frequency", options: Object.fromEntries(Object.entries(FREQS).map(([k, v]) => [k, v.label])) }],
         ["unitPrice", { label: "Unit price", type: "number", min: 0, step: "0.01" }],
+        ["cost", { label: "Unit cost (internal)", type: "number", min: 0, step: "0.01", placeholder: "cost" }],
         ["currentPrice", { label: "Current price (customer pays today)", type: "number", min: 0, step: "0.01", placeholder: "optional" }],
         ["taxable", { label: "Taxable", type: "checkbox" }],
       ];
@@ -434,9 +478,13 @@
         }
         tr.append(td);
       }
+      tr.querySelector('[data-field="cost"]').parentElement.className = "internal";
       const ext = document.createElement("td");
       ext.className = "num ext";
       tr.append(ext);
+      const lm = document.createElement("td");
+      lm.className = "num lmargin internal";
+      tr.append(lm);
       const del = document.createElement("td");
       const btn = document.createElement("button");
       btn.type = "button";
@@ -460,7 +508,7 @@
         const f = el.dataset.field;
         if (el.type === "checkbox") line[f] = el.checked;
         else if (f === "qty" || f === "unitPrice") line[f] = num(el.value);
-        else if (f === "currentPrice") line[f] = el.value === "" ? "" : num(el.value);
+        else if (f === "currentPrice" || f === "cost") line[f] = el.value === "" ? "" : num(el.value);
         else line[f] = el.value.trim();
       }
     }
@@ -471,8 +519,15 @@
     const disc = 1 - Math.min(100, Math.max(0, num(draft.discountPct))) / 100;
     for (const tr of $("qe-lines").querySelectorAll("tr[data-id]")) {
       const line = draft.lines.find((l) => l.id === tr.dataset.id);
-      if (line) tr.querySelector(".ext").textContent = money(num(line.qty) * num(line.unitPrice) * disc);
+      if (!line) continue;
+      tr.querySelector(".ext").textContent = money(num(line.qty) * num(line.unitPrice) * disc);
+      const m = lineMargin(line, disc);
+      const cell = tr.querySelector(".lmargin");
+      cell.textContent = m === null ? "—" : pct(m);
+      cell.classList.toggle("warn", m !== null && m < targetMarginPct());
+      cell.classList.toggle("danger-text", m !== null && m < 0);
     }
+    const target = targetMarginPct();
     const rows = [
       ["Subtotal", money(t.subtotal)],
       ...(t.discount ? [[`Discount (${num(draft.discountPct)}%)`, `−${money(t.discount)}`]] : []),
@@ -484,6 +539,15 @@
       ["Est. annual savings vs. current", t.currentSpend
         ? `${money(t.savings)}${t.savingsPct !== null ? ` (${t.savingsPct.toFixed(1)}%)` : ""}`
         : "Add current prices to calculate", t.savings > 0 ? "good" : ""],
+      ["Margin (internal — not on proposal)", t.marginPct === null
+        ? "Add unit costs to calculate"
+        : `${pct(t.marginPct)} · target ${pct(target)}`,
+        `internal ${t.marginPct === null ? "" : t.marginPct < target ? "below" : "good"}`],
+      ...(t.marginPct === null ? [] : [
+        ["Gross profit per order (internal)", money(t.grossProfit), "internal"],
+        ["Gross profit per year (internal)", money(t.annualProfit), "internal"],
+      ]),
+      ...(t.missingCost ? [[`Cost missing on ${t.missingCost} line${t.missingCost === 1 ? "" : "s"}`, "margin excludes them", "internal below"]] : []),
     ];
     const box = $("qe-totals");
     box.replaceChildren();
@@ -676,7 +740,6 @@
   // (or the target) re-prices the sell field at the target; editing the sell
   // price directly shows the margin that price actually gives.
 
-  const DEFAULT_TARGET_MARGIN = 30;
   state.settings = state.settings || {};
   const mTarget = $("m-target");
   const mCost = $("m-cost");
@@ -685,8 +748,6 @@
 
   const parseNum = (el) => (el.value.trim() === "" ? null : Number(el.value));
   const clampTarget = (t) => Math.min(99.9, Math.max(0, t));
-  const pct = (n) => `${n.toFixed(1)}%`;
-
   function targetMargin() {
     const t = parseNum(mTarget);
     return t === null || !Number.isFinite(t) ? null : clampTarget(t);
@@ -765,6 +826,7 @@
     readLines();
     const line = blankLine();
     line.unitPrice = sell;
+    line.cost = parseNum(mCost) ?? "";
     line.qty = parseNum(mQty) || 1;
     draft.lines.push(line);
     dirty = true;
@@ -786,6 +848,8 @@
     hub.save();
   });
 
+  // Customer-facing. Only the fields listed here are printed; never add a line's
+  // cost or any margin figure (those stay internal to the editor and exports).
   function proposalHtml(q) {
     const t = totals(q);
     const p = state.profile || {};

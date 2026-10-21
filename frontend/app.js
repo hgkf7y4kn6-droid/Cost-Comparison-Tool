@@ -1,5 +1,3 @@
-const API_BASE = (window.API_BASE || "http://localhost:8000").replace(/\/$/, "");
-
 const $ = (id) => document.getElementById(id);
 const money = (n) =>
   "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -8,17 +6,13 @@ let comparisonId = "";
 
 // Shared POST + error-message extraction used by every handler below.
 async function postToApi(path, body, fallbackError) {
-  let response;
-  try {
-    const isJson = !(body instanceof FormData);
-    response = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      body: isJson ? JSON.stringify(body) : body,
-      headers: isJson ? { "Content-Type": "application/json" } : undefined,
-    });
-  } catch (e) {
-    throw new Error(`Connection failed: ${e.message}`);
-  }
+  // SalesHub.api.fetch adds the sign-in token and raises on network errors.
+  const isJson = !(body instanceof FormData);
+  const response = await window.SalesHub.api.fetch(path, {
+    method: "POST",
+    body: isJson ? JSON.stringify(body) : body,
+    headers: isJson ? { "Content-Type": "application/json" } : undefined,
+  });
   let data = null;
   try {
     data = await response.json();
@@ -125,7 +119,7 @@ $("compare-form").addEventListener("submit", (e) => {
         $("manual-lookup-link").href = lookup.portal_url;
       }
 
-      $("download-link").href = `${API_BASE}${data.download_url}`;
+      $("download-link").dataset.path = data.download_url;
       $("download-link").hidden = false;
       $("confirm-status").textContent = "";
       $("compare-results").hidden = false;
@@ -175,8 +169,8 @@ $("spend-form").addEventListener("submit", (e) => {
       $("spend-rows").textContent = `${s.rows_analyzed} records analyzed, ${s.rows_unmatched} unmatched`;
       $("spend-manual-lookup").hidden = !s.manual_lookup_note;
       $("spend-manual-lookup-note").textContent = s.manual_lookup_note || "";
-      $("spend-workbook-link").href = `${API_BASE}${data.workbook_url}`;
-      $("spend-summary-link").href = `${API_BASE}${data.executive_summary_url}`;
+      $("spend-workbook-link").dataset.path = data.workbook_url;
+      $("spend-summary-link").dataset.path = data.executive_summary_url;
       $("spend-results").hidden = false;
     } catch (err) {
       $("spend-error").textContent = err.message;
@@ -188,3 +182,17 @@ $("spend-form").addEventListener("submit", (e) => {
 $("to-quote-btn").addEventListener("click", () => {
   $("to-quote-error").textContent = window.SalesHub.quotes.addComparisonTier($("to-quote-tier").value) || "";
 });
+
+// --- Report downloads (signed-in fetch, so the token stays out of URLs) ---
+for (const [linkId, errorId] of [["download-link", "compare-error"], ["spend-workbook-link", "spend-error"], ["spend-summary-link", "spend-error"]]) {
+  $(linkId).addEventListener("click", async (e) => {
+    e.preventDefault();
+    const path = e.currentTarget.dataset.path;
+    if (!path) return;
+    try {
+      await window.SalesHub.api.download(path);
+    } catch (err) {
+      $(errorId).textContent = err.message;
+    }
+  });
+}

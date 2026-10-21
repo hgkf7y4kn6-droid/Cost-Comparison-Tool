@@ -304,8 +304,6 @@
   // here so it keeps working without the server. Every format then goes
   // through the same review step: pick the sheet/table, skip title rows, and
   // map columns to lead fields.
-  const API = (window.API_BASE || "http://localhost:8000").replace(/\/$/, "");
-
   const FIELD_LABELS = {
     company: "Company", address: "Address", city: "City", county: "County", state: "State", zip: "ZIP",
     industry: "Industry", employees: "Employees", website: "Website", email: "Email", phone: "Phone",
@@ -422,9 +420,11 @@
     fd.append("file", file);
     let res;
     try {
-      res = await fetch(`${API}/leads/parse/`, { method: "POST", body: fd });
+      res = await hub.api.fetch("/leads/parse/", { method: "POST", body: fd });
     } catch (err) {
-      throw new Error(`Excel and PDF files are read by the backend server, which couldn't be reached (${err.message}). CSV files still import without it.`);
+      throw new Error(err.message.startsWith("Connection failed")
+        ? `Excel and PDF files are read by the backend server, which couldn't be reached (${err.message}). CSV files still import without it.`
+        : err.message);
     }
     let data = null;
     try {

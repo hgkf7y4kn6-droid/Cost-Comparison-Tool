@@ -9,6 +9,10 @@
 <body>
   <header class="app-header">
     <h1>Office Basics Sales Hub</h1>
+    <div id="auth-bar" class="auth-bar" hidden>
+      Signed in as <strong id="auth-user"></strong>
+      <button type="button" class="link-btn" id="auth-signout">Sign out</button>
+    </div>
     <nav class="tabs" role="tablist" aria-label="Sales cycle stages">
       <button type="button" role="tab" id="tab-btn-prospecting" aria-controls="tab-prospecting" data-tab="prospecting">1. Prospecting</button>
       <button type="button" role="tab" id="tab-btn-compare" aria-controls="tab-compare" data-tab="compare">2. Cost Comparison</button>
@@ -279,7 +283,7 @@
           <p id="manual-lookup-note"></p>
           <a id="manual-lookup-link" target="_blank" rel="noopener">Open supplies.officebasics.com</a>
         </div>
-        <a id="download-link" class="btn blue" target="_blank" rel="noopener" hidden>Download Cost Comparison (.xlsx)</a>
+        <a id="download-link" class="btn blue" href="#" hidden>Download Cost Comparison (.xlsx)</a>
         <div class="to-quote">
           <select id="to-quote-tier" aria-label="Tier to add to quote">
             <option value="best">BEST tier</option>
@@ -328,8 +332,8 @@
           <p id="spend-manual-lookup-note"></p>
           <a href="https://supplies.officebasics.com/" target="_blank" rel="noopener">Open supplies.officebasics.com</a>
         </div>
-        <a id="spend-workbook-link" class="btn blue" target="_blank" rel="noopener">Download Usage Analysis Workbook (.xlsx)</a>
-        <a id="spend-summary-link" class="btn blue" target="_blank" rel="noopener">Download Executive Summary (.docx)</a>
+        <a id="spend-workbook-link" class="btn blue" href="#">Download Usage Analysis Workbook (.xlsx)</a>
+        <a id="spend-summary-link" class="btn blue" href="#">Download Executive Summary (.docx)</a>
       </div>
     </section>
   </div>
@@ -383,7 +387,7 @@
       </div>
       <div class="table-wrap">
         <table class="leads">
-          <thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th class="num">Lines</th><th class="num">Order total</th><th class="num">First-year value</th><th class="num">Est. annual savings</th><th>Valid until</th></tr></thead>
+          <thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th class="num">Lines</th><th class="num">Order total</th><th class="num">First-year value</th><th class="num">Est. annual savings</th><th class="num" title="Internal — not shown on proposals">Margin 🔒</th><th>Valid until</th></tr></thead>
           <tbody id="q-rows"></tbody>
         </table>
       </div>
@@ -421,7 +425,7 @@
           </div>
           <div class="table-wrap">
             <table class="lines">
-              <thead><tr><th>SKU</th><th>Description</th><th>Line</th><th>Tier</th><th>Qty</th><th>UOM</th><th>Frequency</th><th>Unit price</th><th>Current price</th><th>Tax</th><th class="num">Extended</th><th></th></tr></thead>
+              <thead><tr><th>SKU</th><th>Description</th><th>Line</th><th>Tier</th><th>Qty</th><th>UOM</th><th>Frequency</th><th>Unit price</th><th class="internal" title="Internal — not shown on proposals">Cost 🔒</th><th>Current price</th><th>Tax</th><th class="num">Extended</th><th class="num internal" title="Internal — not shown on proposals">Margin 🔒</th><th></th></tr></thead>
               <tbody id="qe-lines"></tbody>
             </table>
           </div>
@@ -565,8 +569,21 @@
   <!-- Filled in and shown only when printing a proposal -->
   <div id="proposal-print" aria-hidden="true"></div>
 
+  <div id="signin" class="signin-backdrop" role="dialog" aria-modal="true" aria-labelledby="signin-title" hidden>
+    <form id="signin-form" class="signin-card">
+      <h2 id="signin-title">Sign in to the Sales Hub</h2>
+      <p id="signin-message" class="hint"></p>
+      <label>Email <input type="email" id="signin-email" autocomplete="username" required></label>
+      <label>Password <input type="password" id="signin-password" autocomplete="current-password" required></label>
+      <button type="submit" class="btn blue">Sign in</button>
+      <p id="signin-error" class="status err" aria-live="assertive"></p>
+      <p class="hint">Accounts are set up by your administrator on the server.</p>
+    </form>
+  </div>
+
   <script src="config.js"></script>
   <script src="store.js"></script>
+  <script src="auth.js"></script>
   <script src="tabs.js"></script>
   <script src="app.js"></script>
   <script src="prospecting.js"></script>

@@ -301,3 +301,20 @@ table.preview tr.hdr th { background: #edf2f7; font-style: italic; color: #4a556
 .margin-results strong { font-size: 1.25em; }
 .hint.good { color: var(--ok); font-weight: 600; }
 .hint.warn { color: #b7791f; font-weight: 600; }
+
+/* ---------- Internal-only (cost / margin) ---------- */
+th.internal, td.internal { background: #faf5ff; }
+td.internal input { border-color: #d6bcfa; }
+.totals .internal { color: #553c9a; }
+.totals .internal.below strong { color: #b7791f; }
+.totals .internal.good strong { color: var(--ok); }
+td.num.warn, td.lmargin.warn { color: #b7791f; font-weight: 600; }
+
+/* ---------- Sign-in ---------- */
+.app-header { position: relative; }
+.auth-bar { text-align: center; font-size: 0.8em; color: var(--muted); margin-top: -0.4em; }
+.signin-backdrop { position: fixed; inset: 0; background: rgba(26, 32, 44, 0.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 100; }
+.signin-card { background: #fff; border-radius: 12px; padding: 1.4em; width: min(100%, 380px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+.signin-card h2 { margin: 0 0 0.3em; font-size: 1.2em; }
+.signin-card label { display: flex; flex-direction: column; gap: 0.2em; font-size: 0.85em; color: #4a5568; }
+@media print { .signin-backdrop, .auth-bar { display: none !important; } }
