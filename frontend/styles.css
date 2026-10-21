@@ -287,3 +287,17 @@ table.preview th.mapped select { border-color: var(--blue); background: #ebf8ff;
 table.preview td.mapped { background: #f0f9ff; }
 table.preview tr.hdr th { background: #edf2f7; font-style: italic; color: #4a5568; }
 .btn:disabled:not(.small) { cursor: not-allowed; }
+
+/* ---------- Margin calculator ---------- */
+.card { border: 1px solid var(--border); border-radius: 10px; padding: 0.8em 1em; background: #fff; margin: 0.8em 0; }
+.card h3 { margin: 0 0 0.5em; }
+.margin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6em; }
+.margin-grid label { display: flex; flex-direction: column; gap: 0.2em; font-size: 0.8em; color: #4a5568; }
+.margin-grid small { font-size: 0.85em; }
+#m-target { border-color: var(--purple); }
+.margin-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5em; margin: 0.8em 0 0.2em; }
+.margin-results div { display: flex; flex-direction: column; background: #f7fafc; border-radius: 8px; padding: 0.5em 0.7em; }
+.margin-results span { font-size: 0.75em; }
+.margin-results strong { font-size: 1.25em; }
+.hint.good { color: var(--ok); font-weight: 600; }
+.hint.warn { color: #b7791f; font-weight: 600; }

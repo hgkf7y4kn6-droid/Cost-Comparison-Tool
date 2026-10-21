@@ -14,6 +14,7 @@ window.SalesHub = (function () {
     activeLeadId: null,
     lastComparison: null, // latest Cost Comparison result, for adding lines to quotes
     profile: {}, // rep details printed on proposals
+    settings: {}, // user preferences, e.g. targetMargin for the margin calculator
   };
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
@@ -62,7 +63,8 @@ window.SalesHub = (function () {
   }
 
   const money = (n) =>
-    "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    (Number(n) < 0 ? "−$" : "$") +
+    Math.abs(Number(n || 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const today = () => new Date().toISOString().slice(0, 10);
 

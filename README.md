@@ -65,6 +65,11 @@ The frontend is organized as a sales-cycle system, one tab per stage:
      quotes past their validity show as Expired. Sending moves the lead to
      "Proposal sent"; winning moves it to "Won" and creates/updates the account.
    - KPIs: open pipeline, won recurring value, win rate, average days to close.
+   - **Margin calculator** card: set a target margin % (remembered between
+     sessions), enter a cost and the sell price fills in at that target
+     (cost ÷ (1 − margin), rounded up to the cent). Type your own sell price to
+     see the margin, profit per unit / total, markup, and how far it is from
+     target. "Add as a line on the open quote" drops the price into the quote.
 4. **Accounts** (`frontend/accounts.js`) — customers from won quotes (or added
    by hand): status (Onboarding / Active / At risk / Churned), owner, contacts,
    renewal date, next action, and an activity log. Shows recurring and one-time

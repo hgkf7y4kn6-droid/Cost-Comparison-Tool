@@ -362,6 +362,7 @@
     $("qe-number").textContent = q.number;
     $("qe-status").textContent = "";
     $("quote-editor").hidden = false;
+    renderMargin();
     renderLines();
     renderEditorMeta();
     renderList();
@@ -374,6 +375,7 @@
     draft = null;
     dirty = false;
     $("quote-editor").hidden = true;
+    renderMargin();
     renderList();
   }
 
@@ -669,6 +671,109 @@
     else if (q.leadId) hub.openLead(q.leadId);
   });
 
+  // --- Margin calculator ------------------------------------------------------
+  // Target margin persists in the shared store (localStorage). Changing the cost
+  // (or the target) re-prices the sell field at the target; editing the sell
+  // price directly shows the margin that price actually gives.
+
+  const DEFAULT_TARGET_MARGIN = 30;
+  state.settings = state.settings || {};
+  const mTarget = $("m-target");
+  const mCost = $("m-cost");
+  const mSell = $("m-sell");
+  const mQty = $("m-qty");
+
+  const parseNum = (el) => (el.value.trim() === "" ? null : Number(el.value));
+  const clampTarget = (t) => Math.min(99.9, Math.max(0, t));
+  const pct = (n) => `${n.toFixed(1)}%`;
+
+  function targetMargin() {
+    const t = parseNum(mTarget);
+    return t === null || !Number.isFinite(t) ? null : clampTarget(t);
+  }
+
+  function priceAtTarget() {
+    const cost = parseNum(mCost);
+    const t = targetMargin();
+    if (cost === null || !(cost >= 0) || t === null) {
+      mSell.value = "";
+      return;
+    }
+    // Round up to the cent so the price never lands below the target margin.
+    mSell.value = (Math.ceil((cost / (1 - t / 100)) * 100 - 1e-9) / 100).toFixed(2);
+    $("m-sell-hint").textContent = `Priced at your ${pct(t)} target`;
+  }
+
+  function renderMargin() {
+    const cost = parseNum(mCost);
+    const sell = parseNum(mSell);
+    const qty = parseNum(mQty) ?? 1;
+    const ok = cost !== null && sell !== null && sell > 0 && cost >= 0;
+    const profit = ok ? sell - cost : null;
+    const margin = ok ? (profit / sell) * 100 : null;
+    $("m-margin").textContent = ok ? pct(margin) : "—";
+    $("m-profit").textContent = ok ? money(profit) : "—";
+    $("m-total").textContent = ok ? money(profit * qty) : "—";
+    $("m-markup").textContent = ok && cost > 0 ? pct((profit / cost) * 100) : "—";
+
+    const t = targetMargin();
+    const vs = $("m-vs-target");
+    vs.className = "hint";
+    if (ok && t !== null) {
+      const diff = margin - t;
+      if (Math.abs(diff) < 0.05) vs.textContent = `On target (${pct(t)}).`;
+      else {
+        vs.textContent = `${Math.abs(diff).toFixed(1)} pts ${diff > 0 ? "above" : "below"} your ${pct(t)} target.`;
+        vs.className = diff > 0 ? "hint good" : "hint warn";
+      }
+    } else {
+      vs.textContent = "";
+    }
+    $("m-margin").className = ok && margin < 0 ? "danger-text" : "";
+    $("m-to-quote").hidden = !(draft && ok);
+  }
+
+  function saveTarget() {
+    const t = targetMargin();
+    if (t === null) return;
+    mTarget.value = String(t);
+    state.settings.targetMargin = t;
+    hub.save();
+  }
+
+  mTarget.value = String(state.settings.targetMargin ?? DEFAULT_TARGET_MARGIN);
+  mTarget.addEventListener("input", () => {
+    priceAtTarget();
+    renderMargin();
+  });
+  mTarget.addEventListener("change", saveTarget);
+  mCost.addEventListener("input", () => {
+    priceAtTarget();
+    renderMargin();
+  });
+  mSell.addEventListener("input", () => {
+    $("m-sell-hint").textContent = "Your price — margin recalculated";
+    renderMargin();
+  });
+  mQty.addEventListener("input", renderMargin);
+  $("margin-form").addEventListener("submit", (e) => e.preventDefault());
+  renderMargin();
+
+  $("m-to-quote").addEventListener("click", () => {
+    const sell = parseNum(mSell);
+    if (!draft || sell === null) return;
+    readLines();
+    const line = blankLine();
+    line.unitPrice = sell;
+    line.qty = parseNum(mQty) || 1;
+    draft.lines.push(line);
+    dirty = true;
+    $("qe-status").textContent = "Unsaved changes";
+    renderLines();
+    $("quote-editor").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("qe-lines").lastElementChild.querySelector("input").focus();
+  });
+
   // --- Printable proposal ---------------------------------------------------
 
   const profileForm = $("rep-profile");
@@ -797,6 +902,7 @@
 
   hub.on(() => {
     renderAll();
+    renderMargin();
     if (draft) {
       const q = state.quotes.find((x) => x.id === openId);
       if (!q) {
