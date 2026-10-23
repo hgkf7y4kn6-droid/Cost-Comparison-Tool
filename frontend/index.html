@@ -14,14 +14,47 @@
       <button type="button" class="link-btn" id="auth-signout">Sign out</button>
     </div>
     <nav class="tabs" role="tablist" aria-label="Sales cycle stages">
+      <button type="button" role="tab" id="tab-btn-today" aria-controls="tab-today" data-tab="today">Today</button>
       <button type="button" role="tab" id="tab-btn-prospecting" aria-controls="tab-prospecting" data-tab="prospecting">1. Prospecting</button>
       <button type="button" role="tab" id="tab-btn-compare" aria-controls="tab-compare" data-tab="compare">2. Cost Comparison</button>
       <button type="button" role="tab" id="tab-btn-quotes" aria-controls="tab-quotes" data-tab="quotes">3. Proposals &amp; Quotes</button>
       <button type="button" role="tab" id="tab-btn-accounts" aria-controls="tab-accounts" data-tab="accounts">4. Accounts</button>
     </nav>
+    <div class="deal-bar" id="deal-bar" aria-label="Current deal">
+      <div id="deal-active" class="deal-active" hidden>
+        <span class="muted">Working on</span>
+        <button type="button" class="link-btn deal-name" id="deal-name" title="Open this deal"></button>
+        <span class="stage" id="deal-stage"></span>
+        <span class="deal-next">
+          <span class="muted">Next:</span>
+          <button type="button" class="btn small primary" id="deal-next"></button>
+          <small class="muted" id="deal-hint"></small>
+        </span>
+      </div>
+      <div id="deal-none" class="deal-none muted">No deal selected — pick one to see its next step.</div>
+      <span class="deal-tools">
+        <select id="deal-switch" aria-label="Switch deal"></select>
+        <button type="button" class="link-btn" id="deal-clear" title="Stop working on this deal" aria-label="Stop working on this deal">✕</button>
+      </span>
+    </div>
   </header>
 
   <main>
+  <!-- ===================== TODAY TAB ===================== -->
+  <div id="tab-today" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-today" hidden>
+    <h2 class="panel-title">Today <span class="muted" id="today-date"></span></h2>
+    <div id="today-start" class="card start-card" hidden>
+      <h3>Start here</h3>
+      <ol>
+        <li><button type="button" class="link-btn" id="start-import">Import a lead list</button> — CSV, Excel or PDF from the PA/NJ portals or a chamber directory.</li>
+        <li><button type="button" class="link-btn" id="start-margin">Set your target margin</button> — quotes price to it automatically.</li>
+        <li><button type="button" class="link-btn" id="start-profile">Add your details</button> — printed on every proposal.</li>
+      </ol>
+    </div>
+    <div class="kpis" id="today-kpis" aria-live="polite"></div>
+    <div class="today-grid" id="today-grid"></div>
+  </div>
+
   <!-- ===================== PROSPECTING TAB ===================== -->
   <div id="tab-prospecting" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-prospecting" hidden>
     <h2 class="panel-title">Prospecting — Philadelphia · New Jersey · Allentown · Lancaster</h2>
@@ -156,7 +189,7 @@
 
     <!-- D. Lead detail -->
     <section id="lead-detail" hidden>
-      <h2>D. Lead detail — <span id="d-title"></span></h2>
+      <h2>Lead — <span id="d-title"></span></h2>
       <form id="lead-form" class="grid-form">
         <label>Company <input type="text" name="company" required></label>
         <label>Website / domain <input type="text" name="website"></label>
@@ -244,10 +277,6 @@
   <!-- ===================== COST COMPARISON TAB ===================== -->
   <div id="tab-compare" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-compare" hidden>
     <h2 class="panel-title">Good / Better / Best Comparison</h2>
-    <div id="active-lead" class="notice" hidden>
-      Working on: <strong id="active-lead-name"></strong>
-      <button type="button" class="link-btn" id="active-lead-back">← Back to lead</button>
-    </div>
 
     <!-- Step 1: catalog -->
     <section>
@@ -344,6 +373,7 @@
     <p class="hint">Build a quote for a qualified lead or an existing account, pull good/better/best lines straight from the Cost Comparison tab, show the customer their savings, print a proposal, and track it to won or lost. Winning a quote creates the account.</p>
     <div class="kpis" id="q-kpis" aria-live="polite"></div>
 
+    <div id="margin-card-home">
     <div class="card margin-card" id="margin-card">
       <h3>Margin calculator</h3>
       <form id="margin-form" class="margin-grid" novalidate>
@@ -371,6 +401,7 @@
       <p id="m-vs-target" class="hint"></p>
       <button type="button" class="btn small" id="m-to-quote" hidden>Add as a line on the open quote</button>
       <p class="hint">Margin = (sell − cost) ÷ sell. Markup = (sell − cost) ÷ cost. Sell price at target = cost ÷ (1 − target margin).</p>
+    </div>
     </div>
 
     <section>
@@ -434,6 +465,7 @@
           <p class="hint">“Current price” is what the customer pays today for the equivalent item (per unit) — it drives the savings figure. Frequency annualizes recurring lines (e.g. monthly janitorial restock) separately from one-time lines (e.g. a furniture install).</p>
         </div>
 
+        <div class="span-2" id="qe-calc-slot"></div>
         <div class="span-2 totals" id="qe-totals" aria-live="polite"></div>
 
         <label class="span-2">Scope / notes (printed on the proposal) <textarea name="notes" rows="3"></textarea></label>
@@ -566,6 +598,8 @@
 
   </main>
 
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+
   <!-- Filled in and shown only when printing a proposal -->
   <div id="proposal-print" aria-hidden="true"></div>
 
@@ -589,5 +623,8 @@
   <script src="prospecting.js"></script>
   <script src="quotes.js"></script>
   <script src="accounts.js"></script>
+  <script src="deal.js"></script>
+  <script src="today.js"></script>
+  <script src="drawers.js"></script>
 </body>
 </html>

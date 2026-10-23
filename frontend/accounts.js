@@ -303,7 +303,6 @@
     $("account-detail").hidden = false;
     renderDetailExtras();
     renderList();
-    $("account-detail").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function closeAccount() {

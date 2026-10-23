@@ -405,11 +405,15 @@
     $("qe-number").textContent = q.number;
     $("qe-status").textContent = "";
     $("quote-editor").hidden = false;
+    $("qe-calc-slot").append($("margin-card")); // calculator travels with the open quote
     renderMargin();
     renderLines();
     renderEditorMeta();
     renderList();
-    $("quote-editor").scrollIntoView({ behavior: "smooth", block: "start" });
+    // Opening a quote makes its customer the current deal.
+    const dealNow = hub.deal.key();
+    if (q.accountId && findAccount(q.accountId) && dealNow !== `account:${q.accountId}`) hub.deal.set("account", q.accountId);
+    else if (!q.accountId && q.leadId && findLead(q.leadId) && dealNow !== `lead:${q.leadId}`) hub.deal.set("lead", q.leadId);
   }
 
   function closeQuote() {
@@ -418,6 +422,7 @@
     draft = null;
     dirty = false;
     $("quote-editor").hidden = true;
+    $("margin-card-home").append($("margin-card"));
     renderMargin();
     renderList();
   }
@@ -648,10 +653,13 @@
     readLines();
     const q = state.quotes.find((x) => x.id === openId);
     if (!q) return null;
+    const becameWon = q.status !== "won" && draft.status === "won";
     if (q.status !== draft.status) applyStatusSideEffects(draft, q.status);
     Object.assign(q, draft, { updated: new Date().toISOString() });
     dirty = false;
     hub.save();
+    // A won deal carries on as its account (next step: onboarding).
+    if (becameWon && q.accountId) hub.deal.set("account", q.accountId);
     form.elements.status.value = q.status;
     $("qe-status").textContent = message || "Saved.";
     renderEditorMeta();
@@ -832,7 +840,6 @@
     dirty = true;
     $("qe-status").textContent = "Unsaved changes";
     renderLines();
-    $("quote-editor").scrollIntoView({ behavior: "smooth", block: "start" });
     $("qe-lines").lastElementChild.querySelector("input").focus();
   });
 
@@ -953,8 +960,9 @@
       if (!line) return "No match for that tier.";
       if (!confirmDiscard()) return "";
       dirty = false;
-      const lead = findLead(state.activeLeadId);
-      const acct = lead && state.accounts.find((a) => a.leadId === lead.id);
+      const deal = hub.deal.resolve();
+      const acct = deal && deal.acct;
+      const lead = deal && deal.lead;
       const q = acct ? quoteForCustomer("account", acct) : lead ? quoteForCustomer("lead", lead) : newQuote(null);
       q.lines.push(line);
       q.updated = new Date().toISOString();

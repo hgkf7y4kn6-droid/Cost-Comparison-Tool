@@ -109,7 +109,8 @@ $("compare-form").addEventListener("submit", (e) => {
       $("match-source").textContent =
         c.source === "learned" ? "Learned from a confirmed match" : "Algorithmic match";
       renderTiers(c.tiers || {});
-      window.SalesHub.state.lastComparison = c;
+      // Remember which deal this comparison was for, so its next step is "Build quote".
+      window.SalesHub.state.lastComparison = { ...c, forDeal: window.SalesHub.deal.key() };
       window.SalesHub.save();
 
       const lookup = c.manual_lookup;

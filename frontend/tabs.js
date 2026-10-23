@@ -1,9 +1,9 @@
 // Top-level tab switching. Each sales-cycle stage is a tab; the URL hash
-// (#prospecting, #compare) selects one so tabs can be linked/bookmarked.
+// (#today, #prospecting, #compare, …) selects one so tabs can be linked/bookmarked.
 (function () {
   const buttons = Array.from(document.querySelectorAll(".tabs [role=tab]"));
   const names = buttons.map((b) => b.dataset.tab);
-  const DEFAULT_TAB = "prospecting";
+  const DEFAULT_TAB = "today";
 
   function showTab(name) {
     if (!names.includes(name)) name = DEFAULT_TAB;

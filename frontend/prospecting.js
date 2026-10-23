@@ -924,7 +924,6 @@
     $("lead-detail").hidden = false;
     refreshDetailHints();
     renderTable();
-    $("lead-detail").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function closeLead() {
@@ -1048,12 +1047,6 @@
 
   // --- Handoff to Cost Comparison --------------------------------------------
 
-  function showActiveLead() {
-    const lead = state.leads.find((l) => l.id === state.activeLeadId);
-    $("active-lead").hidden = !lead;
-    if (lead) $("active-lead-name").textContent = lead.company;
-  }
-
   $("d-handoff").addEventListener("click", () => {
     const lead = state.leads.find((l) => l.id === openId);
     if (!lead) return;
@@ -1069,10 +1062,8 @@
       lead.updated = new Date().toISOString();
       form.elements.stage.value = "qualified";
     }
-    state.activeLeadId = lead.id;
-    save();
-    renderAll();
-    showActiveLead();
+    hub.deal.set("lead", lead.id); // saves
+    closeLead();
     window.showTab("compare");
     window.scrollTo({ top: 0 });
   });
@@ -1086,13 +1077,8 @@
       lead.score = fitScore(lead);
     }
     if (["new", "enriched", "verified", "contacted"].includes(lead.stage)) lead.stage = "qualified";
-    state.activeLeadId = lead.id;
-    hub.quotes.newForLead(lead.id);
-  });
-
-  $("active-lead-back").addEventListener("click", () => {
-    window.showTab("prospecting");
-    if (state.activeLeadId) openLead(state.activeLeadId);
+    closeLead();
+    hub.quotes.newForLead(lead.id); // also makes this lead the current deal
   });
 
   // --- Reference table --------------------------------------------------------
@@ -1118,7 +1104,6 @@
   // Quotes/accounts can move a lead's stage; keep the table and open form in sync.
   hub.on(() => {
     renderAll();
-    showActiveLead();
     const lead = openId && state.leads.find((l) => l.id === openId);
     if (lead) form.elements.stage.value = lead.stage;
     else if (openId) closeLead();
@@ -1126,5 +1111,4 @@
 
   state.leads.forEach((l) => (l.score = fitScore(l)));
   renderAll();
-  showActiveLead();
 })();

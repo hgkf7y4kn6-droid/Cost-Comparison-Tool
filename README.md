@@ -15,7 +15,22 @@ different unit counts, price alone isn't a fair comparison — the report
 normalizes to **cost per use** whenever `uses_per_case` is available.
 
 ## Sales Hub tabs
-The frontend is organized as a sales-cycle system, one tab per stage:
+Above every tab, the **current deal** bar shows the customer you're working on
+(a lead or an account), where it stands, and one **Next** button for the step
+that moves it forward (find the decision-maker → send outreach → run a cost
+comparison → build the quote → send it → follow up → onboard). It changes as
+the deal does; pick a different deal from its menu. Lead, quote and account
+details open as side panels over the list (Esc or a click outside closes
+them).
+
+**Today** (the default tab) lists what needs attention across all stages:
+account follow-ups due this week, proposals waiting on the customer (expired and
+expiring first), engaged leads with no quote yet, drafts to finish, best-fit
+leads to reach out to, and accounts with renewals coming up or no recent
+contact. Each item opens the right record. On a fresh install it shows a
+three-step "Start here".
+
+The stages themselves, one tab each:
 1. **Prospecting** (`frontend/prospecting.js`) — ethical regional lead sourcing
    for Philadelphia, New Jersey, Allentown/Lehigh Valley and Lancaster:
    - Sourcing playbook checklist (PA Open Data, OpenDataPhilly, Open Data NJ,
