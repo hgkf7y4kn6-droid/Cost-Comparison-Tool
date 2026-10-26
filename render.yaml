@@ -23,6 +23,9 @@ services:
       # it's set.
       - key: AUTH_USERS
         sync: false
+      # Emails (comma-separated) who can open and edit every account.
+      - key: AUTH_MANAGERS
+        sync: false
     disk:
       name: ob-data
       mountPath: /var/data

@@ -54,9 +54,17 @@
     return state.quotes.filter((q) => q.accountId === acct.id || (!q.accountId && acct.leadId && q.leadId === acct.leadId));
   }
 
+  // Year-to-date spend: this calendar year's logged orders (same rule as the server).
+  function ytdSpend(acct) {
+    const year = String(new Date().getFullYear());
+    return (acct.activities || [])
+      .filter((a) => a.type === "order" && String(a.date || "").startsWith(year))
+      .reduce((s, a) => s + (Number(a.amount) || 0), 0);
+  }
+
   function metrics(acct) {
     const won = quotesFor(acct).filter((q) => q.status === "won");
-    const m = { recurring: 0, oneTime: 0, savings: 0, lines: new Set(), wonCount: won.length };
+    const m = { recurring: 0, oneTime: 0, savings: 0, lines: new Set(), wonCount: won.length, ytd: ytdSpend(acct) };
     for (const q of won) {
       const t = hub.quotes.totals(q);
       m.recurring += t.recurring;
@@ -87,6 +95,7 @@
       otherContacts: "",
       status: "onboarding",
       owner: (state.profile || {}).repName || "",
+      ownerEmail: (hub.auth && hub.auth.email) || "",
       startDate: hub.today(),
       renewalDate: hub.addDays(hub.today(), 365),
       locations: 1,
@@ -103,11 +112,13 @@
     return acct;
   }
 
-  function log(accountId, type, text, date) {
+  function log(accountId, type, text, date, amount) {
     const acct = findAccount(accountId);
     if (!acct) return;
     acct.activities = acct.activities || [];
-    acct.activities.push({ id: hub.newId("act"), date: date || hub.today(), type, text });
+    const entry = { id: hub.newId("act"), date: date || hub.today(), type, text };
+    if (type === "order" && Number(amount) > 0) entry.amount = Math.round(Number(amount) * 100) / 100;
+    acct.activities.push(entry);
     acct.updated = new Date().toISOString();
   }
 
@@ -180,6 +191,7 @@
     const stale = ms.filter((m) => m.stale).length;
     hub.renderTiles($("a-kpis"), [
       ["Active accounts", String(live.length), `${state.accounts.length - live.length} churned`],
+      ["YTD spend", money(sum("ytd")), "this year's logged orders"],
       ["Annual recurring value", money(sum("recurring")), `${money(sum("oneTime"))} one-time won`],
       ["Customer savings delivered", money(sum("savings")), "per year, from won quotes"],
       ["Follow-ups overdue", String(overdue), `${stale} with no touch in ${STALE_DAYS}+ days`],
@@ -226,6 +238,7 @@
         [(hub.ref.REGIONS || {})[a.region] || ""],
         null,
         [[...m.lines].map((l) => short[l]).join(" · ") || "—"],
+        [money(m.ytd), "", "num"],
         [money(m.recurring), m.oneTime ? `+ ${money(m.oneTime)} one-time` : "", "num"],
         [m.lastTouch ? hub.fmtDate(m.lastTouch) : "never", m.stale ? `${STALE_DAYS}+ days` : "", m.stale ? "warn" : ""],
         [a.nextActionDate ? hub.fmtDate(a.nextActionDate) : "—", a.nextAction, m.overdue ? "warn" : ""],
@@ -411,6 +424,7 @@
     $("ad-lead-link").hidden = !acct.leadId;
 
     hub.renderTiles($("ad-kpis"), [
+      ["YTD spend", money(m.ytd), "this year's logged orders"],
       ["Annual recurring", money(m.recurring), `${m.wonCount} won quote${m.wonCount === 1 ? "" : "s"}`],
       ["One-time won", money(m.oneTime), ""],
       ["Savings delivered", money(m.savings), "per year"],
@@ -460,6 +474,7 @@
     $("ad-no-quotes").hidden = qs.length > 0;
     $("ad-quotes-aside").textContent = qs.length ? `${qs.length}` : "";
     renderOnboarding(acct);
+    renderOwner(acct);
 
     // Activity timeline, newest first
     const tl = $("ad-activity");
@@ -471,7 +486,7 @@
       when.className = "muted";
       when.textContent = `${hub.fmtDate(a.date)} · ${ACTIVITY_TYPES[a.type] || a.type}`;
       const text = document.createElement("div");
-      text.textContent = a.text;
+      text.textContent = a.type === "order" && a.amount ? `${money(a.amount)} — ${a.text}` : a.text;
       const del = document.createElement("button");
       del.type = "button";
       del.className = "link-btn danger-text";
@@ -502,11 +517,36 @@
     $("ad-status").textContent = "Saved.";
   });
 
+  const toggleAmount = () => ($("act-amount-wrap").hidden = $("act-type").value !== "order");
+  $("act-type").addEventListener("change", toggleAmount);
+  toggleAmount();
+
+  // The owner (sign-in email) decides who can open the account; only managers reassign.
+  function renderOwner(acct) {
+    const input = $("ad-owner-email");
+    input.value = acct.ownerEmail || (hub.auth && hub.auth.email) || "";
+    const manager = hub.auth && hub.auth.role === "manager";
+    input.readOnly = !manager;
+    $("ad-owner-hint").textContent = manager
+      ? "As a manager you can reassign this account; the new owner gets full access."
+      : "Only the owner and managers can open this account. Other reps see just its name, address, phone and YTD spend on the map.";
+  }
+  $("ad-owner-email").addEventListener("change", (e) => {
+    const acct = findAccount(openId);
+    if (!acct || !(hub.auth && hub.auth.role === "manager")) return;
+    const email = e.target.value.trim().toLowerCase();
+    if (!email) return;
+    acct.ownerEmail = email;
+    acct.updated = new Date().toISOString();
+    hub.save();
+  });
+
   $("act-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const text = $("act-text").value.trim();
     if (!openId || !text) return;
-    log(openId, $("act-type").value, text, $("act-date").value || hub.today());
+    log(openId, $("act-type").value, text, $("act-date").value || hub.today(), $("act-amount").value);
+    $("act-amount").value = "";
     const acct = findAccount(openId);
     const next = $("act-next").value.trim();
     if (next) {
@@ -542,6 +582,7 @@
     open: openAccount,
     onboardingProgress,
     ONBOARDING_ACTION,
+    ytdSpend,
   };
 
   hub.on(renderAll);

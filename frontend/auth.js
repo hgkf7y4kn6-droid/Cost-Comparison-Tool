@@ -49,15 +49,21 @@
     setTimeout(() => ($("signin-email").value ? $("signin-password") : $("signin-email")).focus(), 0);
   }
 
+  // Other modules read SalesHub.auth ({ email, role }) and listen for these
+  // events to load or clear the data that lives on the server.
   function showSignedIn() {
     $("signin").hidden = true;
     $("auth-bar").hidden = false;
-    $("auth-user").textContent = session.email;
+    $("auth-user").textContent = session.role === "manager" ? `${session.email} (manager)` : session.email;
     setAppInert(false);
+    hub.auth = { email: session.email, role: session.role || "rep" };
+    window.dispatchEvent(new CustomEvent("saleshub:signedin", { detail: hub.auth }));
   }
 
   function signOut(message) {
     session = null;
+    hub.auth = null;
+    window.dispatchEvent(new CustomEvent("saleshub:signedout"));
     persist();
     $("signin-password").value = "";
     showSignIn(message);
@@ -122,7 +128,7 @@
         // non-JSON error body
       }
       if (!res.ok) throw new Error((data && typeof data.detail === "string" && data.detail) || `Sign-in failed (${res.status}).`);
-      session = { token: data.token, email: data.email, expires_at: data.expires_at };
+      session = { token: data.token, email: data.email, expires_at: data.expires_at, role: data.role || "rep" };
       persist();
       try {
         localStorage.setItem(EMAIL_KEY, data.email);
@@ -146,7 +152,17 @@
   if (session) {
     showSignedIn();
     // Confirms the stored token is still accepted (e.g. not revoked by a password change).
-    apiFetch("/auth/me").catch(() => {});
+    apiFetch("/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((me) => {
+        // Picks up role changes (e.g. made a manager) without signing in again.
+        if (me && session && me.role && me.role !== session.role) {
+          session.role = me.role;
+          persist();
+          showSignedIn();
+        }
+      })
+      .catch(() => {});
   } else {
     showSignIn();
   }

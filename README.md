@@ -147,8 +147,46 @@ immediately invalidates their existing sessions. Sessions last 12 hours
 (`AUTH_TOKEN_HOURS`). Five wrong passwords for one email (or 30 from one IP
 address) lock sign-in for 15 minutes.
 
+## Prospecting map and shared accounts
+The Prospecting tab opens with a **service region map** (Google Maps):
+- **Customer accounts** are star-topped green pins, darker the higher their
+  year-to-date spend (this year's orders logged on the account with an amount:
+  under $5k, $5k–25k, $25k–100k, $100k–250k, $250k+).
+- **Prospects** (your leads not yet won) are round pins, blue to purple as they
+  move through the pipeline.
+- **Add a lead from Google Maps**: search for a business in the region, check
+  the preview (address, phone, website, category, region, duplicate check) and
+  add it; the lead opens with those details filled in.
+- Addresses are located with Google's geocoder a few at a time and refreshed
+  after 30 days.
+
+**Who sees what.** Accounts are stored on the server (`accounts_store.py`,
+SQLite at `$DATA_DIR/sales_hub.db`) with an owner, the rep who created the
+account. The owner and managers can open the full account by clicking its
+pin; any other rep sees only the name, address, general phone number and YTD
+spend. The server enforces this: it never sends other reps the rest of the
+record and rejects their edits. Managers are listed in `AUTH_MANAGERS`
+(comma-separated emails) and can reassign an account's owner. Leads, quotes
+and the item catalog still live in each rep's browser.
+
+Setup:
+1. **Google Maps key.** In Google Cloud, enable the *Maps JavaScript API*,
+   *Places API (New)* and *Geocoding API*, create a browser key restricted to
+   the site's address, and set `GOOGLE_MAPS_API_KEY` in `frontend/config.js`
+   (optionally `GOOGLE_MAPS_MAP_ID`). Without a key the map card explains this
+   and the rest of the app works. Google bills map loads, place searches and
+   geocoding beyond its monthly free usage.
+2. **Persistent disk.** Shared accounts need the Render persistent disk
+   (`render.yaml`, Standard plan). Without it they're lost on every restart.
+3. **Managers.** Set `AUTH_MANAGERS` on Render.
+
+Google's terms limit how long you may keep data copied from Google Maps
+(place details and coordinates). The lead keeps Google's place ID; review
+Google Maps Platform terms before relying on stored copies long-term.
+
 ## Project layout
 - `auth.py` — sign-in: password hashing, signed session tokens, lockout.
+- `accounts_store.py` — shared accounts and who may see/edit them.
 - `table_extract.py` — Excel/PDF → rows for lead import.
 - `backend.py` — FastAPI backend (CLIP + FAISS matching, OCR, report generation).
   Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`).

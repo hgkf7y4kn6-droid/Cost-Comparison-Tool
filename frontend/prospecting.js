@@ -1098,6 +1098,16 @@
   Object.assign(hub.ref, { REGIONS, SEGMENTS, PRODUCTS, STAGES, regionFor });
   // CSV in the browser, Excel/PDF through the backend; used by the item catalog too.
   hub.readTableFile = readLeadFile;
+  // Used by the map's "Add from Google Maps".
+  hub.findLead = (fields) =>
+    state.leads.find((l) => (fields.placeId && l.placeId === fields.placeId) || companyKey(l) === companyKey(fields)) || null;
+  hub.addLead = (fields) => {
+    const now = new Date().toISOString();
+    const lead = normalizeLead({ id: newId(), created: now, updated: now, ...fields });
+    state.leads.push(lead);
+    save();
+    return lead;
+  };
   hub.openLead = (id) => {
     window.showTab("prospecting");
     openLead(id);

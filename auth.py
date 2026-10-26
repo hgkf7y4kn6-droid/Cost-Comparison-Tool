@@ -10,6 +10,10 @@ as `Authorization: Bearer <token>` on every other request. Tokens are signed
 with AUTH_SECRET (HMAC-SHA256), expire after AUTH_TOKEN_HOURS (default 12),
 and stop working if that user's password hash changes or the user is removed.
 
+Managers are listed (by email) in AUTH_MANAGERS, comma-separated. They can
+open and edit every account; everyone else sees full details only for the
+accounts they own.
+
 With no AUTH_USERS configured, every protected endpoint refuses requests
 (fail closed) rather than running open.
 """
@@ -85,10 +89,14 @@ def _fingerprint(stored_hash: str) -> str:
 
 
 class Authenticator:
-    def __init__(self, users: Dict[str, str], secret: str):
+    def __init__(self, users: Dict[str, str], secret: str, managers: Optional[set] = None):
         self.users = users
         self.secret = secret.encode()
+        self.managers = {m.strip().lower() for m in (managers or set()) if m.strip()}
         self._failures: Dict[str, list] = {}
+
+    def role(self, email: str) -> str:
+        return "manager" if email in self.managers else "rep"
 
     @property
     def configured(self) -> bool:
@@ -158,7 +166,8 @@ def from_environment() -> Authenticator:
     users = load_users()
     if not users:
         print("WARNING: AUTH_USERS is not set; all API requests will be refused until it is.", file=sys.stderr)
-    return Authenticator(users, secret)
+    managers = set(os.environ.get("AUTH_MANAGERS", "").lower().split(","))
+    return Authenticator(users, secret, managers)
 
 
 if __name__ == "__main__":

@@ -63,6 +63,48 @@
     <!-- Pipeline overview -->
     <div class="pipeline-bar" id="stage-counts" aria-live="polite"></div>
 
+    <!-- Service region map -->
+    <section class="xcard" data-card="region-map">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Service region map</h2><p class="xcard-sub">Customer accounts ★ and your prospects, pinned at their company address.</p></div>
+        <span class="xcard-aside" id="map-aside"></span>
+      </div>
+      <div class="xcard-body">
+        <div class="map-tools" id="map-tools">
+          <div class="map-add">
+            <label for="map-place-search">Add a lead from Google Maps</label>
+            <div id="map-place-slot" class="map-place-slot"><input type="search" disabled placeholder="Loading Google Maps…"></div>
+          </div>
+          <div class="map-filters" role="group" aria-label="Show on map">
+            <label class="check"><input type="checkbox" id="map-show-accounts" checked> My accounts</label>
+            <label class="check"><input type="checkbox" id="map-show-others" checked> Other reps' accounts</label>
+            <label class="check"><input type="checkbox" id="map-show-prospects" checked> Prospects</label>
+          </div>
+        </div>
+        <div id="place-preview" class="place-preview" hidden>
+          <div class="pp-main">
+            <strong id="pp-name"></strong> <span id="pp-region" class="stage"></span>
+            <div id="pp-address"></div>
+            <div class="muted"><span id="pp-phone"></span> · <span id="pp-web"></span> · <span id="pp-industry"></span></div>
+            <div id="pp-dup" class="warn" hidden></div>
+          </div>
+          <div class="row-buttons">
+            <button type="button" class="btn small primary" id="pp-add">Add as lead</button>
+            <button type="button" class="btn small" id="pp-open" hidden>Open lead</button>
+            <button type="button" class="btn small" id="pp-cancel">Cancel</button>
+          </div>
+        </div>
+        <div id="map-setup" class="notice" hidden>
+          <p id="map-setup-msg"><strong>The map needs a Google Maps API key.</strong> In Google Cloud, create a key with the <em>Maps JavaScript API</em> and <em>Places API (New)</em> enabled, restrict it to this site's web address, and put it in <code>frontend/config.js</code> as <code>GOOGLE_MAPS_API_KEY</code>.</p>
+        </div>
+        <div class="map-wrap">
+          <div id="region-map" class="region-map" role="region" aria-label="Map of the service region"></div>
+          <div id="map-legend" class="map-legend"></div>
+        </div>
+        <p class="hint"><span id="map-status"></span> <button type="button" class="link-btn" id="map-locate-more" hidden>Locate more</button></p>
+      </div>
+    </section>
+
     <!-- A. Playbook -->
     <section class="xcard" id="playbook" data-card="playbook">
       <div class="xcard-head">
@@ -643,6 +685,7 @@
     <h2 class="panel-title">Accounts</h2>
     <p class="hint">Customers created when a quote is won (or added by hand). Track recurring value and savings delivered, log every touch, keep a next action on each account, and spot cross-sell gaps and upcoming renewals.</p>
     <div class="kpis" id="a-kpis" aria-live="polite"></div>
+    <p data-sync-status class="sync-status"></p>
 
     <div id="a-followups-wrap" class="notice" hidden>
       <strong>Follow-ups due this week</strong>
@@ -676,7 +719,7 @@
       </div>
       <div class="table-wrap">
         <table class="leads">
-          <thead><tr><th>Account</th><th>Region</th><th>Status</th><th>Buying</th><th class="num">Annual recurring</th><th>Last touch</th><th>Next action</th><th>Renewal</th></tr></thead>
+          <thead><tr><th>Account</th><th>Region</th><th>Status</th><th>Buying</th><th class="num">YTD spend</th><th class="num">Annual recurring</th><th>Last touch</th><th>Next action</th><th>Renewal</th></tr></thead>
           <tbody id="a-rows"></tbody>
         </table>
       </div>
@@ -717,7 +760,8 @@
       <form id="account-form" class="grid-form">
         <label>Company <input type="text" name="company" required></label>
         <label>Status <select name="status"></select></label>
-        <label>Account owner <input type="text" name="owner"></label>
+        <label>Account owner (name) <input type="text" name="owner"></label>
+        <label>Owner sign-in email <input type="email" id="ad-owner-email"><small class="muted" id="ad-owner-hint"></small></label>
         <label>Locations served <input type="number" name="locations" min="1" step="1"></label>
         <label>Primary contact <input type="text" name="contactName"></label>
         <label>Title <input type="text" name="contactTitle"></label>
@@ -766,6 +810,7 @@
       <form id="act-form" class="grid-form">
         <label>Type <select id="act-type"></select></label>
         <label>Date <input type="date" id="act-date"></label>
+        <label id="act-amount-wrap" hidden>Order amount ($) <input type="number" id="act-amount" min="0" step="0.01" placeholder="counts toward YTD spend"></label>
         <label class="span-2">What happened <input type="text" id="act-text" placeholder="e.g. Quarterly review with facilities — adding 2nd floor in Q1" required></label>
         <label>Set next action (optional) <input type="text" id="act-next" placeholder="e.g. Send apparel samples"></label>
         <label>Next action due <input type="date" id="act-next-date"></label>
@@ -807,8 +852,10 @@
   <script src="catalog.js"></script>
   <script src="quotes.js"></script>
   <script src="accounts.js"></script>
+  <script src="sync.js"></script>
   <script src="deal.js"></script>
   <script src="today.js"></script>
+  <script src="map.js"></script>
   <script src="drawers.js"></script>
 </body>
 </html>

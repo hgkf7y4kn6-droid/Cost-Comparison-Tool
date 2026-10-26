@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from transformers import CLIPModel, CLIPProcessor
 
 import auth
+from accounts_store import AccountStore
 from table_extract import extract_sheets
 
 try:
@@ -472,12 +473,54 @@ async def login(payload: LoginRequest, request: Request):
     if not user:
         raise HTTPException(401, "Email or password is incorrect.")
     token, expires_at = authenticator.issue_token(user)
-    return {"token": token, "email": user, "expires_at": expires_at}
+    return {"token": token, "email": user, "expires_at": expires_at, "role": authenticator.role(user)}
 
 
 @app.get("/auth/me")
 async def who_am_i(request: Request):
-    return {"email": request.state.user}
+    email = request.state.user
+    return {"email": email, "role": authenticator.role(email)}
+
+
+# ==========================================
+# 4c. SHARED ACCOUNTS (see accounts_store.py for who sees what)
+# ==========================================
+account_store = AccountStore(os.path.join(os.environ.get("DATA_DIR", tempfile.gettempdir()), "sales_hub.db"))
+
+
+@app.get("/accounts/")
+async def list_accounts(request: Request):
+    email = request.state.user
+    role = authenticator.role(email)
+    full, limited = await run_in_threadpool(account_store.list_visible, email, role == "manager")
+    return {"accounts": full, "others": limited, "role": role}
+
+
+@app.put("/accounts/{account_id}")
+async def save_account(account_id: str, request: Request):
+    email = request.state.user
+    try:
+        data = await request.json()
+    except ValueError:
+        raise HTTPException(400, "Body must be JSON.")
+    try:
+        return await run_in_threadpool(account_store.save, account_id, data, email, authenticator.role(email) == "manager")
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+@app.delete("/accounts/{account_id}")
+async def delete_account(account_id: str, request: Request):
+    email = request.state.user
+    try:
+        found = await run_in_threadpool(account_store.delete, account_id, email, authenticator.role(email) == "manager")
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    if not found:
+        raise HTTPException(404, "No such account.")
+    return {"deleted": account_id}
 
 
 @app.get("/catalog/status/")
