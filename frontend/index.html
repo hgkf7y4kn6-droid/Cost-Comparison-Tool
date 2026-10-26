@@ -3,29 +3,371 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Basics Comparison</title>
+  <title>Sales Hub</title>
+  <meta name="description" content="Sales Hub — prospecting, cost comparisons, proposals and accounts in one place.">
+  <meta name="theme-color" content="#0f1a2c">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23a87a2a'/%3E%3Cpath d='M8 21.5 L13.5 16 L17.5 19.5 L24 12 M19.5 12 H24 V16.5' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/plus-jakarta-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/dm-serif-display-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <header class="app-header">
+    <div class="topbar">
+      <a class="brand" href="#today" aria-label="Sales Hub — Today"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#a87a2a"/><path d="M8 21.5 L13.5 16 L17.5 19.5 L24 12" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 12 H24 V16.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-name">Sales Hub</span></a>
+      <nav class="tabs" role="tablist" aria-label="Sales cycle stages">
+        <button type="button" role="tab" id="tab-btn-today" aria-controls="tab-today" data-tab="today">Today</button>
+        <button type="button" role="tab" id="tab-btn-prospecting" aria-controls="tab-prospecting" data-tab="prospecting">Prospecting</button>
+        <button type="button" role="tab" id="tab-btn-compare" aria-controls="tab-compare" data-tab="compare">Cost Comparison</button>
+        <button type="button" role="tab" id="tab-btn-quotes" aria-controls="tab-quotes" data-tab="quotes">Proposals</button>
+        <button type="button" role="tab" id="tab-btn-accounts" aria-controls="tab-accounts" data-tab="accounts">Accounts</button>
+      </nav>
+      <div id="auth-bar" class="auth-bar" hidden>
+        <strong id="auth-user"></strong>
+        <button type="button" class="link-btn" id="auth-signout">Sign out</button>
+      </div>
+    </div>
+  </header>
+  <div class="deal-strip">
+    <div class="deal-bar" id="deal-bar" aria-label="Current deal">
+      <div id="deal-active" class="deal-active" hidden>
+        <span class="muted">Working on</span>
+        <button type="button" class="link-btn deal-name" id="deal-name" title="Open this deal"></button>
+        <span class="stage" id="deal-stage"></span>
+        <span class="deal-next">
+          <span class="muted">Next:</span>
+          <button type="button" class="btn small primary" id="deal-next"></button>
+          <small class="muted" id="deal-hint"></small>
+        </span>
+      </div>
+      <div id="deal-none" class="deal-none muted">No deal selected — pick one to see its next step.</div>
+      <span class="deal-tools">
+        <select id="deal-switch" aria-label="Switch deal"></select>
+        <button type="button" class="link-btn" id="deal-clear" title="Stop working on this deal" aria-label="Stop working on this deal">✕</button>
+      </span>
+    </div>
+  </div>
+
   <main>
-    <h1>Office Basics Good / Better / Best Comparison</h1>
+  <!-- ===================== TODAY TAB ===================== -->
+  <div id="tab-today" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-today" hidden>
+    <h2 class="panel-title">Today <span class="muted" id="today-date"></span></h2>
+    <div id="today-start" class="card start-card" hidden>
+      <h3>Start here</h3>
+      <ol>
+        <li><button type="button" class="link-btn" id="start-import">Import a lead list</button> — CSV, Excel or PDF from the PA/NJ portals or a chamber directory.</li>
+        <li><button type="button" class="link-btn" id="start-margin">Set your target margin</button> — quotes price to it automatically.</li>
+        <li><button type="button" class="link-btn" id="start-profile">Add your details</button> — printed on every proposal.</li>
+      </ol>
+    </div>
+    <div class="kpis" id="today-kpis" aria-live="polite"></div>
+    <div class="today-grid" id="today-grid"></div>
+  </div>
+
+  <!-- ===================== PROSPECTING TAB ===================== -->
+  <div id="tab-prospecting" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-prospecting" hidden>
+    <h2 class="panel-title">Prospecting <span class="muted">Philadelphia · New Jersey · Lehigh Valley · Lancaster</span></h2>
+
+    <!-- Pipeline overview -->
+    <div class="pipeline-bar" id="stage-counts" aria-live="polite"></div>
+
+    <!-- Service region map -->
+    <section class="xcard" data-card="region-map">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Service region map</h2><p class="xcard-sub">Customers in green (darker = more spend this year); prospects in grey, open to every rep.</p></div>
+        <span class="xcard-aside" id="map-aside"></span>
+      </div>
+      <div class="xcard-body">
+        <div class="map-tools" id="map-tools">
+          <div class="map-add">
+            <label for="map-place-search">Add a lead from Google Maps</label>
+            <div id="map-place-slot" class="map-place-slot"><input type="search" disabled placeholder="Loading Google Maps…"></div>
+          </div>
+          <div class="map-filters" role="group" aria-label="Show on map">
+            <label class="check"><input type="checkbox" id="map-show-customers" checked> Customers</label>
+            <label class="check"><input type="checkbox" id="map-show-prospects" checked> Prospects</label>
+            <label class="check"><input type="checkbox" id="map-only-mine"> Only mine</label>
+          </div>
+        </div>
+        <div id="place-preview" class="place-preview" hidden>
+          <div class="pp-main">
+            <strong id="pp-name"></strong> <span id="pp-region" class="stage"></span>
+            <div id="pp-address"></div>
+            <div class="muted"><span id="pp-phone"></span> · <span id="pp-web"></span> · <span id="pp-industry"></span></div>
+            <div id="pp-dup" class="warn" hidden></div>
+          </div>
+          <div class="row-buttons">
+            <button type="button" class="btn small primary" id="pp-add">Add as lead</button>
+            <button type="button" class="btn small" id="pp-open" hidden>Open lead</button>
+            <button type="button" class="btn small" id="pp-cancel">Cancel</button>
+          </div>
+        </div>
+        <div id="map-setup" class="notice" hidden>
+          <p id="map-setup-msg"><strong>The map needs a Google Maps API key.</strong> In Google Cloud, create a key with the <em>Maps JavaScript API</em> and <em>Places API (New)</em> enabled, restrict it to this site's web address, and put it in <code>frontend/config.js</code> as <code>GOOGLE_MAPS_API_KEY</code>.</p>
+        </div>
+        <div class="map-wrap">
+          <div id="region-map" class="region-map" role="region" aria-label="Map of the service region"></div>
+          <div id="map-legend" class="map-legend"></div>
+        </div>
+        <p class="hint"><span id="map-status"></span> <button type="button" class="link-btn" id="map-locate-more" hidden>Locate more</button></p>
+      </div>
+    </section>
+
+    <!-- A. Playbook -->
+    <section class="xcard" id="playbook" data-card="playbook">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Sourcing playbook</h2><p class="xcard-sub">Check steps off as you go — progress is saved in this browser.</p></div>
+        <span class="xcard-aside" id="playbook-progress"></span>
+      </div>
+      <div class="xcard-body">
+        <ol class="playbook">
+          <li>
+            <label><input type="checkbox" data-step="pa-open-data"> <strong>Pull PA registrations</strong> (Allentown, Lancaster, Philadelphia)</label>
+            <p>Download the Department of State registered-businesses dataset from the <a href="https://data.pa.gov/browse?q=registered%20businesses" target="_blank" rel="noopener">PA Open Data Portal</a>. Filter County to <em>Lehigh</em>, <em>Northampton</em>, <em>Lancaster</em> and <em>Philadelphia</em>.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="philly-licenses"> <strong>Pull Philadelphia licenses</strong></label>
+            <p>Export the L&amp;I Business Licenses / Commercial Activity Licenses dataset from <a href="https://opendataphilly.org/" target="_blank" rel="noopener">OpenDataPhilly</a>.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="nj-open-data"> <strong>Pull NJ entities</strong></label>
+            <p>Search <a href="https://data.nj.gov/browse?q=business" target="_blank" rel="noopener">Open Data NJ</a> for active commercial entities in Camden, Burlington, Mercer and Gloucester counties. Expect entity names and industry tags, not contacts.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="geo-fence"> <strong>Geo-fence storefronts (optional)</strong></label>
+            <p>Use a rate-limited local-business scraper (<a href="https://outscraper.com/" target="_blank" rel="noopener">Outscraper</a>, <a href="https://phantombuster.com/" target="_blank" rel="noopener">PhantomBuster</a>, <a href="https://scrap.io/" target="_blank" rel="noopener">Scrap.io</a>). Draw polygons around the Route 22 / I-78 Lehigh Valley corridor and Lancaster City. Collect only what the merchant publishes: business phone, generic email (info@, sales@), storefront address.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="chambers"> <strong>Mine chamber member directories (B2B)</strong></label>
+            <p><a href="https://www.chamberphl.com/" target="_blank" rel="noopener">Greater Philadelphia Chamber</a>, <a href="https://www.lehighvalleychamber.org/" target="_blank" rel="noopener">Lehigh Valley Chamber</a>, <a href="https://www.lancasterchamber.com/" target="_blank" rel="noopener">Lancaster Chamber</a>. <strong>Check each site's <code>/robots.txt</code> first</strong> and skip any that disallow automated collection.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="import"> <strong>Import raw CSVs below</strong></label>
+            <p>Consumer emails are purged, duplicates merged, and out-of-territory rows dropped automatically.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="enrich"> <strong>Enrich (waterfall)</strong></label>
+            <p>Export the list, upload company names/domains to <a href="https://www.clay.com/" target="_blank" rel="noopener">Clay</a> or <a href="https://www.apollo.io/" target="_blank" rel="noopener">Apollo.io</a>, and match each company to the regional decision-maker (see title map below). Filter to 20–500 employees and look for intent triggers. <strong>Do not scrape individuals from corporate sites.</strong> Re-import the enriched file here — rows merge by ID / company.</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="verify"> <strong>Verify emails</strong></label>
+            <p>Run the list through <a href="https://www.zerobounce.net/" target="_blank" rel="noopener">ZeroBounce</a> or <a href="https://neverbounce.com/" target="_blank" rel="noopener">NeverBounce</a> before any outreach and record the result on each lead (or include an <code>email_status</code> column on re-import).</p>
+          </li>
+          <li>
+            <label><input type="checkbox" data-step="outreach"> <strong>Outreach with local personalization + one-click opt-out</strong></label>
+            <p>Use the draft generator on each lead. Every email carries a clear opt-out line.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Import -->
+    <section class="xcard" data-card="lead-import">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Import leads</h2><p class="xcard-sub">CSV, Excel or PDF — you review the columns before anything is imported.</p></div>
+      </div>
+      <div class="xcard-body">
+      <p class="hint">Columns are recognized automatically; PDFs can be tables or directory listings. Template: <a href="prospects_template.csv" download>prospects_template.csv</a>.</p>
+      <form id="lead-import-form">
+        <input type="file" id="lead-file" accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
+        <input type="text" id="lead-source" placeholder="Source label (e.g. PA DOS registry, OpenDataPhilly, Lancaster Chamber)">
+        <label class="check"><input type="checkbox" id="skip-out-of-territory" checked> Drop rows outside Philadelphia / NJ / Lehigh Valley / Lancaster</label>
+        <label class="check"><input type="checkbox" id="skip-headcount"> Drop rows whose known headcount is outside 20–500</label>
+        <button type="submit" class="btn blue">Read File</button>
+      </form>
+      <p class="hint">Scanned PDFs are read with OCR — check those rows carefully.</p>
+
+      <div id="import-review" class="review" hidden>
+        <h3>Review import — <span id="ir-file"></span></h3>
+        <label id="ir-sheet-wrap">Sheet / table
+          <select id="ir-sheet"></select>
+        </label>
+        <p id="ir-note" class="hint"></p>
+        <div class="ir-controls">
+          <label>Skip the first <input type="number" id="ir-skip" min="0" step="1" value="0"> rows (titles, notes)</label>
+          <label class="check"><input type="checkbox" id="ir-header"> The next row is column headers</label>
+        </div>
+        <p class="hint">Pick the lead field for each column (highlighted = will be imported). Company is required. Labels like “Phone:” are stripped, emails are pulled out of mixed text, and a full “street, city, ST zip” address fills city/state/ZIP.</p>
+        <div class="table-wrap">
+          <table class="preview">
+            <thead id="ir-head"></thead>
+            <tbody id="ir-body"></tbody>
+          </table>
+        </div>
+        <p id="ir-summary" class="hint"></p>
+        <p id="ir-error" class="status err" aria-live="assertive"></p>
+        <div class="row-buttons">
+          <button type="button" class="btn green" id="ir-import">Import</button>
+          <button type="button" class="btn small" id="ir-cancel">Cancel</button>
+        </div>
+      </div>
+      <div id="import-report" class="notice" hidden aria-live="polite"></div>
+      <p id="import-error" class="status err" aria-live="assertive"></p>
+      </div>
+    </section>
+
+    <!-- Pipeline -->
+    <section class="xcard" data-card="lead-pipeline">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Lead pipeline</h2><p class="xcard-sub">Select a lead to open it.</p></div>
+        <span class="xcard-aside" id="lead-count"></span>
+      </div>
+      <div class="xcard-body">
+      <div class="filters">
+        <input type="search" id="f-search" placeholder="Search company, city, contact…" aria-label="Search leads">
+        <select id="f-region" aria-label="Filter by region"><option value="">All regions</option></select>
+        <select id="f-segment" aria-label="Filter by segment"><option value="">All segments</option></select>
+        <select id="f-stage" aria-label="Filter by stage"><option value="">All stages</option></select>
+        <select id="f-size" aria-label="Filter by headcount">
+          <option value="">Any headcount</option>
+          <option value="in">20–500 employees</option>
+          <option value="unknown">Headcount unknown</option>
+          <option value="out">Outside 20–500</option>
+        </select>
+        <select id="f-sort" aria-label="Sort leads">
+          <option value="score">Sort: fit score</option>
+          <option value="company">Sort: company</option>
+          <option value="updated">Sort: recently updated</option>
+        </select>
+      </div>
+      <div class="toolbar">
+        <span class="muted"></span>
+        <button type="button" class="btn small" id="add-lead">+ Add lead</button>
+        <button type="button" class="btn small" id="export-filtered">Export shown (CSV)</button>
+        <button type="button" class="btn small danger" id="delete-filtered">Delete shown</button>
+      </div>
+      <div class="table-wrap">
+        <table class="leads">
+          <thead>
+            <tr><th>Fit</th><th>Company</th><th>Region</th><th>Segment</th><th>Employees</th><th>Contact</th><th>Email</th><th>Stage</th></tr>
+          </thead>
+          <tbody id="lead-rows"></tbody>
+        </table>
+      </div>
+      <p id="empty-leads" class="hint">No leads yet — import a CSV or add one manually.</p>
+      </div>
+    </section>
+
+    <!-- D. Lead detail -->
+    <section id="lead-detail" hidden>
+      <h2>Lead — <span id="d-title"></span></h2>
+      <form id="lead-form" class="grid-form">
+        <label>Company <input type="text" name="company" required></label>
+        <label>Website / domain <input type="text" name="website"></label>
+        <label>Address <input type="text" name="address"></label>
+        <label>City <input type="text" name="city"></label>
+        <label>County <input type="text" name="county"></label>
+        <label>State <input type="text" name="state" maxlength="2"></label>
+        <label>ZIP <input type="text" name="zip"></label>
+        <label>Industry <input type="text" name="industry"></label>
+        <label>Employees <input type="number" name="employees" min="0"></label>
+        <label>Phone <input type="text" name="phone"></label>
+        <label>Region <select name="region"></select></label>
+        <label>Segment <select name="segment"></select></label>
+        <label>Contact name <input type="text" name="contactName"></label>
+        <label>Contact title <input type="text" name="contactTitle"></label>
+        <label>Email <input type="email" name="email"></label>
+        <label>Email verification
+          <select name="emailStatus">
+            <option value="unverified">Unverified</option>
+            <option value="valid">Valid</option>
+            <option value="catch-all">Catch-all / risky</option>
+            <option value="invalid">Invalid</option>
+          </select>
+        </label>
+        <label>Stage <select name="stage"></select></label>
+        <label>Source <input type="text" name="source"></label>
+
+        <fieldset class="span-2">
+          <legend>Product interest</legend>
+          <div id="d-products" class="checks"></div>
+          <p class="hint" id="d-titles"></p>
+        </fieldset>
+        <fieldset class="span-2">
+          <legend>Intent triggers (from enrichment / public news)</legend>
+          <div id="d-triggers" class="checks"></div>
+        </fieldset>
+        <label class="span-2">Notes <textarea name="notes" rows="3"></textarea></label>
+
+        <div class="span-2 row-buttons">
+          <button type="submit" class="btn green">Save Lead</button>
+          <button type="button" class="btn purple" id="d-handoff">Start Cost Comparison →</button>
+          <button type="button" class="btn blue" id="d-quote">New quote →</button>
+          <button type="button" class="btn small danger" id="d-delete">Delete lead</button>
+          <button type="button" class="btn small" id="d-close">Close</button>
+        </div>
+      </form>
+      <p id="d-warning" class="notice" hidden></p>
+      <p id="d-status" class="status ok" aria-live="polite"></p>
+
+      <div class="xcard" data-card="lead-outreach">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Outreach draft</h3><p class="xcard-sub">Personalized to the lead's local footprint and product interest. Always keep the opt-out line.</p></div>
+        </div>
+        <div class="xcard-body">
+          <textarea id="d-draft" rows="11" readonly></textarea>
+          <button type="button" class="btn small" id="d-copy">Copy draft</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reference -->
+    <section class="xcard" data-card="targeting-reference" data-open="false">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Targeting reference</h2><p class="xcard-sub">Priority industries, who to contact for each product line, and compliance.</p></div>
+      </div>
+      <div class="xcard-body">
+        <h3>Priority industries</h3>
+        <ul>
+          <li><strong>Healthcare networks &amp; medical groups</strong> — scrubs/uniforms, heavy janitorial, admin furniture (e.g. Penn Medicine, Lehigh Valley Health Network, Penn State Health).</li>
+          <li><strong>Corporate &amp; professional services</strong> — workstations, branded apparel, office supplies (Center City financial hubs, Cherry Hill tech, Route 22 corporate parks).</li>
+          <li><strong>Property management &amp; CRE</strong> — high-volume janitorial; first to know about tenant move-ins needing furniture.</li>
+          <li><strong>Hospitality, distribution &amp; light manufacturing</strong> — durable uniforms, industrial cleaning, warehouse office desks (Lehigh Valley and Lancaster corridors).</li>
+        </ul>
+        <h3>Decision-maker title map</h3>
+        <div class="table-wrap">
+          <table class="ref">
+            <thead><tr><th>What you sell</th><th>Titles to target</th><th>Why</th></tr></thead>
+            <tbody id="title-map"></tbody>
+          </table>
+        </div>
+        <h3>Compliance</h3>
+        <ul>
+          <li>CAN-SPAM permits B2B cold email to business addresses when the offer is relevant to their operations — include your physical address and an honored one-click opt-out.</li>
+          <li>Never email consumer accounts (gmail, yahoo, etc.); they're purged on import and blocked on save.</li>
+          <li>Verify every address before sending to protect domain health.</li>
+          <li>Respect <code>robots.txt</code> and site Terms; prefer government open data and licensed enrichment over scraping company sites.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== COST COMPARISON TAB ===================== -->
+  <div id="tab-compare" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-compare" hidden>
+    <h2 class="panel-title">Cost Comparison <span class="muted">Good · Better · Best</span></h2>
 
     <!-- Step 1: catalog -->
-    <section>
-      <h2>1. Upload your Office Basics SKU/cost export</h2>
-      <p class="hint">Columns required: sku, name, description, category, tier (good/better/best), price</p>
+    <section class="xcard" data-card="compare-catalog">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>1. Load your good / better / best catalog</h2><p class="xcard-sub">Columns required: sku, name, description, category, tier (good/better/best), price</p></div>
+      </div>
+      <div class="xcard-body">
       <form id="catalog-form">
         <input type="file" id="catalog-file" accept=".xlsx,.xls,.csv" required>
         <button type="submit" class="btn blue">Load Catalog</button>
       </form>
       <p id="catalog-status" class="status ok" aria-live="polite"></p>
       <p id="catalog-error" class="status err" aria-live="assertive"></p>
+      </div>
     </section>
 
     <!-- Step 2: competitor product -->
-    <section>
-      <h2>2. Upload the current (competitor) product</h2>
-      <p class="hint">Photo, PDF, or Excel — price and product info are extracted automatically</p>
+    <section class="xcard" data-card="compare-product">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>2. Upload the current (competitor) product</h2><p class="xcard-sub">Photo, PDF, or Excel — price and product info are extracted automatically</p></div>
+      </div>
+      <div class="xcard-body">
       <form id="compare-form">
         <input type="file" id="compare-file" accept=".png,.jpg,.jpeg,.webp,.pdf,.xlsx,.xls" required>
         <input type="number" id="competitor-uses" min="0" step="any"
@@ -44,7 +386,16 @@
           <p id="manual-lookup-note"></p>
           <a id="manual-lookup-link" target="_blank" rel="noopener">Open supplies.officebasics.com</a>
         </div>
-        <a id="download-link" class="btn blue" target="_blank" rel="noopener" hidden>Download Cost Comparison (.xlsx)</a>
+        <a id="download-link" class="btn blue" href="#" hidden>Download Cost Comparison (.xlsx)</a>
+        <div class="to-quote">
+          <select id="to-quote-tier" aria-label="Tier to add to quote">
+            <option value="best">BEST tier</option>
+            <option value="better">BETTER tier</option>
+            <option value="good">GOOD tier</option>
+          </select>
+          <button type="button" class="btn green" id="to-quote-btn">Add to quote →</button>
+        </div>
+        <p id="to-quote-error" class="status err" aria-live="assertive"></p>
 
         <hr>
         <p class="hint">Was this the right call? Correct any tier below and confirm so similar products are matched this way next time.</p>
@@ -56,11 +407,15 @@
         </form>
         <p id="confirm-status" class="status" aria-live="polite"></p>
       </div>
+      </div>
     </section>
 
     <!-- Step 3: spend analysis -->
-    <section>
-      <h2>3. Usage analysis &amp; executive summary (optional)</h2>
+    <section class="xcard" data-card="compare-spend" data-open="false">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>3. Usage analysis &amp; executive summary</h2><p class="xcard-sub">Optional — see what months of spend would have cost with your equivalents.</p></div>
+      </div>
+      <div class="xcard-body">
       <p class="hint">Upload historical spend data (date, location, product, quantity, unit_price or total_price) to see how much Office Basics equivalents would have saved.</p>
       <form id="spend-form">
         <input type="file" id="spend-file" accept=".csv,.xlsx,.xls" required>
@@ -84,13 +439,438 @@
           <p id="spend-manual-lookup-note"></p>
           <a href="https://supplies.officebasics.com/" target="_blank" rel="noopener">Open supplies.officebasics.com</a>
         </div>
-        <a id="spend-workbook-link" class="btn blue" target="_blank" rel="noopener">Download Usage Analysis Workbook (.xlsx)</a>
-        <a id="spend-summary-link" class="btn blue" target="_blank" rel="noopener">Download Executive Summary (.docx)</a>
+        <a id="spend-workbook-link" class="btn blue" href="#">Download Usage Analysis Workbook (.xlsx)</a>
+        <a id="spend-summary-link" class="btn blue" href="#">Download Executive Summary (.docx)</a>
+      </div>
       </div>
     </section>
+  </div>
+
+  <!-- ===================== PROPOSALS & QUOTES TAB ===================== -->
+  <div id="tab-quotes" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-quotes" hidden>
+    <h2 class="panel-title">Proposals &amp; Quotes</h2>
+
+    <div class="kpis" id="q-kpis" aria-live="polite"></div>
+
+    <section class="xcard" data-card="quotes-list">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Quotes</h2><p class="xcard-sub">Open one to keep building it, or start a new proposal.</p></div>
+        <span class="xcard-aside" id="q-count"></span>
+      </div>
+      <div class="xcard-body">
+        <div class="filters">
+          <input type="search" id="q-f-search" placeholder="Search quote #, company, contact…" aria-label="Search quotes">
+          <select id="q-f-status" aria-label="Filter by status">
+            <option value="">All statuses</option>
+          </select>
+        </div>
+        <div class="toolbar">
+          <span class="muted"></span>
+          <button type="button" class="btn small primary" id="q-new">+ New proposal</button>
+          <button type="button" class="btn small" id="q-export">Export shown (CSV)</button>
+        </div>
+        <div class="table-wrap">
+          <table class="leads">
+            <thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th class="num">Lines</th><th class="num">Order total</th><th class="num">First-year value</th><th class="num">Est. annual savings</th><th class="num" title="Internal — not shown on proposals">Margin 🔒</th><th>Valid until</th></tr></thead>
+            <tbody id="q-rows"></tbody>
+          </table>
+        </div>
+        <p id="q-empty" class="hint">No quotes yet. Start one here, from a lead (“New quote”), or from a cost comparison (“Add to quote”).</p>
+      </div>
+    </section>
+
+    <section class="xcard" data-card="item-catalog">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Item catalog</h2><p class="xcard-sub">What you can sell and what it costs you. Line items pull their cost from here.</p></div>
+        <span class="xcard-aside" id="cat-summary"></span>
+      </div>
+      <div class="xcard-body">
+        <div class="count-chips" id="cat-counts"></div>
+        <p id="cat-empty" class="hint">Import your cost file (CSV or Excel) with at least an item name/description and a cost column. SKU, category, list price, unit and pack are used when present; each item is filed under Janitorial Supplies, Breakroom Supplies, Office Supplies, Printing Solutions, Print and Promotional, or Furniture from its category or name. See <a href="catalog_items_template.csv" download>catalog_items_template.csv</a>.</p>
+        <form id="cat-form" class="cat-form">
+          <input type="file" id="cat-file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
+          <label class="check"><input type="checkbox" id="cat-replace"> Replace the whole catalog (otherwise items merge by SKU and costs update)</label>
+          <div class="row-buttons">
+            <button type="submit" class="btn small primary">Import items</button>
+            <button type="button" class="btn small" id="cat-sample">Load sample items</button>
+            <button type="button" class="btn small danger" id="cat-clear" hidden>Clear catalog</button>
+          </div>
+        </form>
+        <p id="cat-sample-note" class="hint warn" hidden>Sample items (SKUs starting “SAMPLE-”) have made-up costs — replace them with your real cost file before quoting.</p>
+        <p id="cat-report" class="notice" hidden aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="xcard margin-card" id="margin-card" data-card="margin-calculator">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Margin calculator</h2><p class="xcard-sub">Your target margin is saved and used as the default on new proposals.</p></div>
+      </div>
+      <div class="xcard-body">
+        <form id="margin-form" class="margin-grid" novalidate>
+          <label>Target margin (%)
+            <input type="number" id="m-target" min="0" max="99.9" step="0.1" inputmode="decimal">
+            <small class="muted">Saved for next time</small>
+          </label>
+          <label>Cost ($)
+            <input type="number" id="m-cost" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+          </label>
+          <label>Sell price ($)
+            <input type="number" id="m-sell" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+            <small class="muted" id="m-sell-hint">Fills in from cost and target</small>
+          </label>
+          <label>Quantity
+            <input type="number" id="m-qty" min="0" step="1" value="1" inputmode="numeric">
+          </label>
+        </form>
+        <div class="margin-results" aria-live="polite">
+          <div><span class="muted">Margin</span><strong id="m-margin">—</strong></div>
+          <div><span class="muted">Profit / unit</span><strong id="m-profit">—</strong></div>
+          <div><span class="muted">Total profit</span><strong id="m-total">—</strong></div>
+          <div><span class="muted">Markup</span><strong id="m-markup">—</strong></div>
+        </div>
+        <p id="m-vs-target" class="hint"></p>
+        <p class="hint">Margin = (sell − cost) ÷ sell. Markup = (sell − cost) ÷ cost. Sell price at target = cost ÷ (1 − target margin).</p>
+      </div>
+    </section>
+
+    <section class="xcard" data-card="rep-profile" data-open="false">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Your details for proposals</h2><p class="xcard-sub">Printed on every proposal.</p></div>
+      </div>
+      <div class="xcard-body">
+        <form id="rep-profile" class="grid-form">
+          <label>Your name <input type="text" name="repName"></label>
+          <label>Email <input type="email" name="repEmail"></label>
+          <label>Phone <input type="text" name="repPhone"></label>
+          <label>Office Basics mailing address <input type="text" name="repAddress"></label>
+        </form>
+      </div>
+    </section>
+
+    <section id="quote-editor" hidden>
+      <h2>Quote <span id="qe-number"></span> — <span id="qe-company"></span> <span id="qe-badge"></span></h2>
+      <p class="hint" id="qe-meta"></p>
+
+      <div class="xcard" data-card="qe-customer">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Customer &amp; terms</h3></div>
+          <span class="xcard-aside" id="qe-customer-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <form id="quote-form" class="grid-form">
+            <label class="span-2">Customer <select name="customer"></select></label>
+            <label>Company name on proposal <input type="text" name="company"></label>
+            <label>Contact name <input type="text" name="contactName"></label>
+            <label>Contact title <input type="text" name="contactTitle"></label>
+            <label>Contact email <input type="email" name="email"></label>
+            <label>Valid for (days) <input type="number" name="validDays" min="1" step="1"></label>
+            <label>Payment terms <input type="text" name="terms" list="terms-options"></label>
+            <label>Delivery / installation ($) <input type="number" name="delivery" min="0" step="0.01"></label>
+            <label>Discount (%) <input type="number" name="discountPct" min="0" max="100" step="0.1"></label>
+            <label>Sales tax rate (%) <input type="number" name="taxRate" min="0" step="0.001"></label>
+            <label class="check"><input type="checkbox" name="taxExempt"> Tax-exempt non-profit (certificate on file)</label>
+            <label>Status <select name="status"></select></label>
+            <label id="qe-loss-wrap" hidden>Loss reason <select name="lossReason"></select></label>
+            <p class="hint span-2">Tax rate defaults from the customer's location (Philadelphia 8%, rest of PA 6%, NJ 6.625%). Confirm rates and exemptions for each deal — clothing is generally exempt in PA and NJ.</p>
+            <label class="span-2">Scope / notes (printed on the proposal) <textarea name="notes" rows="3"></textarea></label>
+          </form>
+        </div>
+      </div>
+
+      <div class="xcard lineup-card" data-card="qe-lineup">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Contract line items</h3><p class="xcard-sub">Select a line item to choose and price it. Cost and margin stay internal.</p></div>
+          <span class="xcard-aside" id="qe-lines-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <div class="default-margin">
+            <label for="qe-default-margin">Margin for every item</label>
+            <span class="input-suffix"><input type="number" id="qe-default-margin" min="0" max="99.9" step="0.5" inputmode="decimal"><span>%</span></span>
+            <button type="button" class="btn small" id="qe-apply-margin">Apply to all line items</button>
+            <small class="muted">New items start at this margin. Starts at your saved target.</small>
+          </div>
+          <div id="qe-from-comparison" class="notice" hidden>
+            <p>From your last cost comparison (<strong id="qe-comp-product"></strong>) — add a tier as a line item; the competitor's price fills “current price”:</p>
+            <div class="row-buttons">
+              <button type="button" class="btn small" id="qe-add-good"></button>
+              <button type="button" class="btn small" id="qe-add-better"></button>
+              <button type="button" class="btn small" id="qe-add-best"></button>
+            </div>
+          </div>
+          <ol class="lineup" id="qe-lineup"></ol>
+          <div class="lineup-totals" id="qe-lineup-totals"></div>
+        </div>
+      </div>
+
+      <div class="totals" id="qe-totals" aria-live="polite"></div>
+
+      <div class="row-buttons qe-actions">
+        <button type="button" class="btn green" id="qe-save">Save</button>
+        <button type="button" class="btn blue" id="qe-print">Print / Save PDF</button>
+        <button type="button" class="btn small" id="qe-mark-sent">Mark sent</button>
+        <button type="button" class="btn small" id="qe-mark-won">Mark won</button>
+        <button type="button" class="btn small" id="qe-mark-lost">Mark lost</button>
+        <button type="button" class="btn small" id="qe-duplicate">Duplicate</button>
+        <button type="button" class="btn small" id="qe-open-customer">Open customer</button>
+        <button type="button" class="btn small danger" id="qe-delete">Delete</button>
+        <button type="button" class="btn small" id="qe-close">Close</button>
+      </div>
+      <p id="qe-status" class="status ok" aria-live="polite"></p>
+      <datalist id="terms-options">
+        <option value="Net 30"><option value="Net 45"><option value="Net 60"><option value="Due on receipt"><option value="50% deposit, balance on install">
+      </datalist>
+
+      <!-- Item picker: opens over the quote like DFS Riches' "Draft QB" screen -->
+      <div id="item-picker" class="picker" role="dialog" aria-modal="true" aria-labelledby="ip-title" hidden>
+        <div class="picker-header">
+          <button type="button" class="link-btn picker-back" id="ip-back">‹ Proposal</button>
+          <div class="picker-heading"><strong id="ip-title" class="picker-title"></strong><small class="muted" id="ip-step"></small></div>
+          <button type="button" class="link-btn danger-text picker-remove" id="ip-remove" hidden>Remove</button>
+        </div>
+
+        <div id="ip-choose" class="picker-body">
+          <div class="ip-browse">
+            <div class="ip-cat-col">
+              <div class="ip-col-head"><strong>Categories</strong> <button type="button" class="link-btn" id="ip-cats-clear" hidden>All</button></div>
+              <div class="ip-cats" id="ip-cats" role="group" aria-label="Major categories — choose one or more"></div>
+              <p class="hint">Pick one or more. None picked shows every category.</p>
+            </div>
+            <div class="ip-search-col">
+              <input type="search" id="ip-search" placeholder="Search items, SKU, description…" aria-label="Search items">
+              <p class="hint" id="ip-count"></p>
+              <div id="ip-empty" class="notice" hidden>
+                <p>Your item catalog is empty. Import your cost file in the <strong>Item catalog</strong> card on the Proposals tab, or try the builder with sample items.</p>
+                <button type="button" class="btn small" id="ip-load-sample">Load sample items</button>
+              </div>
+              <ul class="ip-results" id="ip-results"></ul>
+              <button type="button" class="link-btn" id="ip-custom">+ Add an item that isn't in the catalog</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="ip-price" class="picker-body" hidden>
+          <div class="ip-item-head">
+            <span class="stage" id="ip-cat-label"></span>
+            <span class="muted" id="ip-from-catalog">Cost pulled from your catalog</span>
+            <button type="button" class="link-btn" id="ip-change">‹ Change item</button>
+          </div>
+          <div class="ip-grid">
+            <label class="span-2">Item <input type="text" id="ip-name"></label>
+            <label>SKU <input type="text" id="ip-sku"></label>
+            <label>Unit <input type="text" id="ip-uom"></label>
+            <label class="internal">Cost 🔒 <input type="number" id="ip-cost" min="0" step="0.01" inputmode="decimal"></label>
+            <label class="ip-key">Margin % <input type="number" id="ip-margin" min="0" max="99.9" step="0.1" inputmode="decimal"></label>
+            <label class="ip-key">Sell price <input type="number" id="ip-sell" min="0" step="0.01" inputmode="decimal"></label>
+            <label>Quantity <input type="number" id="ip-qty" min="0" step="any" inputmode="decimal"></label>
+            <label>Frequency <select id="ip-freq"></select></label>
+            <label>Customer pays today (per unit) <input type="number" id="ip-current" min="0" step="0.01" placeholder="optional"></label>
+            <label class="check"><input type="checkbox" id="ip-taxable"> Taxable</label>
+          </div>
+          <div class="margin-results">
+            <div><span class="muted">Profit / unit</span><strong id="ip-profit">—</strong></div>
+            <div><span class="muted">Extended</span><strong id="ip-ext">—</strong></div>
+            <div><span class="muted">Gross profit</span><strong id="ip-gp">—</strong></div>
+            <div><span class="muted">Markup</span><strong id="ip-markup">—</strong></div>
+          </div>
+          <p class="hint" id="ip-vs-target"></p>
+          <p class="status err" id="ip-error" aria-live="assertive"></p>
+          <div class="row-buttons">
+            <button type="button" class="btn green" id="ip-save">Save line item</button>
+            <button type="button" class="btn blue" id="ip-save-next">Save &amp; next line item →</button>
+          </div>
+        </div>
+
+        <div class="picker-bar">
+          <div><span class="picker-bar-label">Line items</span> <span class="picker-bar-value" id="ip-bar-lines">0</span></div>
+          <div><span class="picker-bar-label">Subtotal</span> <span class="picker-bar-value" id="ip-bar-subtotal">$0.00</span></div>
+          <div><span class="picker-bar-label">Margin 🔒</span> <span class="picker-bar-value" id="ip-bar-margin">—</span> <small class="muted" id="ip-bar-target"></small></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== ACCOUNTS TAB ===================== -->
+  <div id="tab-accounts" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-accounts" hidden>
+    <h2 class="panel-title">Accounts</h2>
+
+    <div class="kpis" id="a-kpis" aria-live="polite"></div>
+    <p data-sync-status class="sync-status"></p>
+
+    <div id="a-followups-wrap" class="notice" hidden>
+      <strong>Follow-ups due this week</strong>
+      <ul id="a-followups" class="plain"></ul>
+    </div>
+
+    <section class="xcard" data-card="accounts-list">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Accounts</h2><p class="xcard-sub">Select an account to open it.</p></div>
+        <span class="xcard-aside" id="a-count"></span>
+      </div>
+      <div class="xcard-body">
+      <div class="filters">
+        <input type="search" id="a-f-search" placeholder="Search company, city, contact, owner…" aria-label="Search accounts">
+        <select id="a-f-status" aria-label="Filter accounts">
+          <option value="">All accounts</option>
+          <option value="stale">No touch in 60+ days</option>
+          <option value="renewal">Renewal within 90 days</option>
+        </select>
+        <select id="a-f-sort" aria-label="Sort accounts">
+          <option value="value">Sort: annual value</option>
+          <option value="next">Sort: next action date</option>
+          <option value="renewal">Sort: renewal date</option>
+          <option value="company">Sort: company</option>
+        </select>
+      </div>
+      <div class="toolbar">
+        <span class="muted"></span>
+        <button type="button" class="btn small" id="a-new">+ Add account</button>
+        <button type="button" class="btn small" id="a-export">Export shown (CSV)</button>
+      </div>
+      <div class="table-wrap">
+        <table class="leads">
+          <thead><tr><th>Account</th><th>Region</th><th>Status</th><th>Buying</th><th class="num">YTD spend</th><th class="num">Annual recurring</th><th>Last touch</th><th>Next action</th><th>Renewal</th></tr></thead>
+          <tbody id="a-rows"></tbody>
+        </table>
+      </div>
+      <p id="a-empty" class="hint">No accounts yet — mark a quote won, or add one manually.</p>
+      </div>
+    </section>
+
+    <section id="account-detail" hidden>
+      <h2>Account — <span id="ad-title"></span></h2>
+      <div class="kpis small" id="ad-kpis"></div>
+
+      <div class="xcard onboarding-card" id="ad-onboarding-card" data-card="account-onboarding">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Customer Onboarding</h3><p class="xcard-sub">Get the new customer set up and ordering. Finishing every step makes the account Active.</p></div>
+          <span class="xcard-aside" id="ad-onboarding-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <div class="onboarding-flags">
+            <label class="check"><input type="checkbox" id="ad-nonprofit"> Non-profit (needs a tax-exempt certificate)</label>
+            <label class="check"><input type="checkbox" id="ad-resells"> Will resell some of the supplies (needs a resale certificate)</label>
+          </div>
+          <div class="progress" aria-hidden="true"><div class="progress-fill" id="ad-onboarding-bar"></div></div>
+          <ul class="checklist" id="ad-onboarding"></ul>
+          <p class="hint" id="ad-onboarding-done" hidden>Onboarding complete — the account is Active. Next up: a first business review in 90 days.</p>
+        </div>
+      </div>
+
+      <div class="xcard" data-card="account-coverage">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Product-line coverage</h3><p class="xcard-sub">What they buy today, and who to talk to about the rest.</p></div>
+        </div>
+        <div class="xcard-body">
+          <div id="ad-coverage" class="coverage-grid"></div>
+        </div>
+      </div>
+
+      <div class="xcard" data-card="account-details">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Account details</h3></div>
+        </div>
+        <div class="xcard-body">
+      <form id="account-form" class="grid-form">
+        <label>Company <input type="text" name="company" required></label>
+        <label>Status <select name="status"></select></label>
+        <label>Account owner (name) <input type="text" name="owner"></label>
+        <label>Owner sign-in email <input type="email" id="ad-owner-email"><small class="muted" id="ad-owner-hint"></small>
+          <button type="button" class="btn small" id="ad-claim" hidden>Make me the owner</button></label>
+        <label>Locations served <input type="number" name="locations" min="1" step="1"></label>
+        <label>Primary contact <input type="text" name="contactName"></label>
+        <label>Title <input type="text" name="contactTitle"></label>
+        <label>Email <input type="email" name="email"></label>
+        <label>Phone <input type="text" name="phone"></label>
+        <label>Address <input type="text" name="address"></label>
+        <label>City <input type="text" name="city"></label>
+        <label>State <input type="text" name="state" maxlength="2"></label>
+        <label>ZIP <input type="text" name="zip"></label>
+        <label>Payment terms <input type="text" name="terms" list="terms-options"></label>
+        <label>Customer since <input type="date" name="startDate"></label>
+        <label>Renewal / pricing review <input type="date" name="renewalDate"></label>
+        <label>Next action <input type="text" name="nextAction"></label>
+        <label>Next action due <input type="date" name="nextActionDate"></label>
+        <label class="span-2">Other contacts (HR, facilities, AP…) <textarea name="otherContacts" rows="2"></textarea></label>
+        <label class="span-2">Notes <textarea name="notes" rows="2"></textarea></label>
+        <div class="span-2 row-buttons">
+          <button type="submit" class="btn green">Save Account</button>
+          <button type="button" class="btn purple" id="ad-new-quote">New quote for this account →</button>
+          <button type="button" class="btn small" id="ad-lead-link">Open original lead</button>
+          <button type="button" class="btn small danger" id="ad-delete">Delete account</button>
+          <button type="button" class="btn small" id="ad-close">Close</button>
+        </div>
+      </form>
+      <p id="ad-status" class="status ok" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div class="xcard" data-card="account-quotes">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Quotes</h3></div>
+          <span class="xcard-aside" id="ad-quotes-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <ul id="ad-quotes" class="plain"></ul>
+          <p id="ad-no-quotes" class="hint">No quotes linked to this account.</p>
+        </div>
+      </div>
+
+      <div class="xcard" data-card="account-activity">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Activity</h3><p class="xcard-sub">Log every touch; set the next action as you go.</p></div>
+          <span class="xcard-aside" id="ad-activity-aside"></span>
+        </div>
+        <div class="xcard-body">
+      <form id="act-form" class="grid-form">
+        <label>Type <select id="act-type"></select></label>
+        <label>Date <input type="date" id="act-date"></label>
+        <label id="act-amount-wrap" hidden>Order amount ($) <input type="number" id="act-amount" min="0" step="0.01" placeholder="counts toward YTD spend"></label>
+        <label class="span-2">What happened <input type="text" id="act-text" placeholder="e.g. Quarterly review with facilities — adding 2nd floor in Q1" required></label>
+        <label>Set next action (optional) <input type="text" id="act-next" placeholder="e.g. Send apparel samples"></label>
+        <label>Next action due <input type="date" id="act-next-date"></label>
+        <div class="span-2"><button type="submit" class="btn small">Log activity</button></div>
+      </form>
+      <ul id="ad-activity" class="timeline"></ul>
+      <p id="ad-no-activity" class="hint">No activity logged yet.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
   </main>
 
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+
+  <!-- Filled in and shown only when printing a proposal -->
+  <div id="proposal-print" aria-hidden="true"></div>
+
+  <div id="signin" class="signin-backdrop" role="dialog" aria-modal="true" aria-labelledby="signin-title" hidden>
+    <form id="signin-form" class="signin-card">
+      <span class="brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#a87a2a"/><path d="M8 21.5 L13.5 16 L17.5 19.5 L24 12" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 12 H24 V16.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-name">Sales Hub</span></span>
+      <h2 id="signin-title">Welcome back</h2>
+      <p id="signin-message" class="hint"></p>
+      <label>Email <input type="email" id="signin-email" autocomplete="username" required></label>
+      <label>Password <input type="password" id="signin-password" autocomplete="current-password" required></label>
+      <button type="submit" class="btn blue">Sign in</button>
+      <p id="signin-error" class="status err" aria-live="assertive"></p>
+      <p class="hint">Accounts are set up by your administrator on the server.</p>
+    </form>
+  </div>
+
   <script src="config.js"></script>
+  <script src="store.js"></script>
+  <script src="cards.js"></script>
+  <script src="auth.js"></script>
+  <script src="tabs.js"></script>
   <script src="app.js"></script>
+  <script src="prospecting.js"></script>
+  <script src="catalog.js"></script>
+  <script src="quotes.js"></script>
+  <script src="accounts.js"></script>
+  <script src="sync.js"></script>
+  <script src="deal.js"></script>
+  <script src="today.js"></script>
+  <script src="map.js"></script>
+  <script src="drawers.js"></script>
 </body>
 </html>

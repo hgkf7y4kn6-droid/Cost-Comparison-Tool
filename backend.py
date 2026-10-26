@@ -14,8 +14,11 @@ import pandas as pd
 import pdfplumber
 import torch
 from docx import Document
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -23,6 +26,10 @@ from openpyxl.utils import get_column_letter
 from PIL import Image
 from pydantic import BaseModel
 from transformers import CLIPModel, CLIPProcessor
+
+import auth
+from accounts_store import RecordStore
+from table_extract import extract_sheets
 
 try:
     import pytesseract
@@ -241,6 +248,43 @@ def style_header_row(ws, row: int, ncols: int):
 # ==========================================
 app = FastAPI(title="Office Basics Good/Better/Best Comparison Engine")
 
+# Every endpoint except these requires a signed-in user (see auth.py).
+PUBLIC_PATHS = {"/health", "/auth/login"}
+# The web app itself (frontend/) is served from "/" so the whole product runs
+# from this one service. Those static files are public; the data they show
+# comes from the protected API.
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+
+
+def _is_frontend_file(path: str) -> bool:
+    if path == "/":
+        return os.path.isdir(FRONTEND_DIR)
+    full = os.path.realpath(os.path.join(FRONTEND_DIR, path.lstrip("/")))
+    return full.startswith(os.path.realpath(FRONTEND_DIR) + os.sep) and os.path.isfile(full)
+authenticator = auth.from_environment()
+
+
+# Registered before CORSMiddleware so CORS stays the outer layer: preflights are
+# answered and 401s still carry CORS headers the browser can read.
+@app.middleware("http")
+async def require_sign_in(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+        return await call_next(request)
+    if request.method in ("GET", "HEAD") and _is_frontend_file(request.url.path):
+        return await call_next(request)
+    if not authenticator.configured:
+        return JSONResponse(
+            {"detail": "Sign-in isn't set up on the server yet (AUTH_USERS is empty)."}, status_code=503
+        )
+    header = request.headers.get("authorization", "")
+    token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    user = authenticator.verify_token(token) if token else None
+    if not user:
+        return JSONResponse({"detail": "Please sign in."}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
+    request.state.user = user["sub"]
+    return await call_next(request)
+
+
 # The frontend is served from a different origin (Cloudflare), so the browser
 # needs CORS. ALLOWED_ORIGINS is a comma-separated list, e.g.
 # "https://cost-comparison-tool.example.workers.dev"; "*" allows any origin.
@@ -252,6 +296,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/reports", StaticFiles(directory=REPORTS_DIR), name="reports")
+# Compress API responses and the web app's files (JS/CSS/JSON shrink ~70-80%).
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 engine = CLIPSearchEngine()
 feedback_store = FeedbackStore(engine)
 
@@ -414,6 +460,99 @@ async def health():
     return {"status": "ok"}
 
 
+# ==========================================
+# 4b. SIGN-IN
+# ==========================================
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+def _client_ip(request: Request) -> str:
+    # Render's proxy appends the real client address as the last X-Forwarded-For entry.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.post("/auth/login")
+async def login(payload: LoginRequest, request: Request):
+    if not authenticator.configured:
+        raise HTTPException(503, "Sign-in isn't set up on the server yet (AUTH_USERS is empty).")
+    ip = _client_ip(request)
+    email = payload.email.strip().lower()
+    if authenticator.locked_out(email, ip):
+        raise HTTPException(429, "Too many failed sign-in attempts. Try again in 15 minutes.")
+    # PBKDF2 is deliberately slow; keep it off the event loop.
+    user = await run_in_threadpool(authenticator.login, email, payload.password, ip)
+    if not user:
+        raise HTTPException(401, "Email or password is incorrect.")
+    token, expires_at = authenticator.issue_token(user)
+    return {"token": token, "email": user, "expires_at": expires_at, "role": authenticator.role(user)}
+
+
+@app.get("/auth/me")
+async def who_am_i(request: Request):
+    email = request.state.user
+    return {"email": email, "role": authenticator.role(email)}
+
+
+# ==========================================
+# 4c. SHARED RECORDS: accounts and leads (see accounts_store.py for who sees what)
+# ==========================================
+record_store = RecordStore(os.path.join(os.environ.get("DATA_DIR", tempfile.gettempdir()), "sales_hub.db"))
+
+
+def _record_call(fn, *args):
+    try:
+        return fn(*args)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+@app.get("/records/{kind}/")
+async def list_records(kind: str, request: Request):
+    email = request.state.user
+    role = authenticator.role(email)
+    full, limited = await run_in_threadpool(_record_call, record_store.list_visible, kind, email, role == "manager")
+    return {"records": full, "others": limited, "role": role}
+
+
+@app.post("/records/{kind}/bulk")
+async def save_records(kind: str, request: Request):
+    email = request.state.user
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(400, "Body must be JSON.")
+    records = body.get("records") if isinstance(body, dict) else None
+    return await run_in_threadpool(_record_call, record_store.save_many, kind, records, email, authenticator.role(email) == "manager")
+
+
+@app.put("/records/{kind}/{record_id}")
+async def save_record(kind: str, record_id: str, request: Request):
+    email = request.state.user
+    try:
+        data = await request.json()
+    except ValueError:
+        raise HTTPException(400, "Body must be JSON.")
+    return await run_in_threadpool(_record_call, record_store.save, kind, record_id, data, email, authenticator.role(email) == "manager")
+
+
+@app.delete("/records/{kind}/{record_id}")
+async def delete_record(kind: str, record_id: str, request: Request):
+    email = request.state.user
+    found = await run_in_threadpool(_record_call, record_store.delete, kind, record_id, email, authenticator.role(email) == "manager")
+    if not found:
+        raise HTTPException(404, "No such record.")
+    return {"deleted": record_id}
+
+
 @app.get("/catalog/status/")
 async def catalog_status():
     return {
@@ -422,6 +561,42 @@ async def catalog_status():
         "learned_comparisons": len(feedback_store.entries),
         "ocr_available": OCR_AVAILABLE,
     }
+
+
+# ==========================================
+# 5b. LEAD FILE PARSING (Prospecting tab)
+# ==========================================
+MAX_LEAD_FILE_BYTES = 15 * 1024 * 1024
+
+
+@app.post("/leads/parse/")
+async def parse_lead_file(file: UploadFile = File(...)):
+    """
+    Read an Excel workbook (.xlsx/.xls) or PDF into rows of text cells so the
+    Prospecting tab can preview it and map columns to lead fields. Nothing is
+    stored. Returns {"sheets": [{"name", "kind", "rows", "note"}]}; see
+    table_extract.py for what each kind means.
+    """
+    ext = (file.filename or "").lower().rsplit(".", 1)[-1]
+    if ext not in {"xlsx", "xls", "pdf"}:
+        raise HTTPException(400, "Lead files must be .xlsx, .xls or .pdf (CSV is read in the browser).")
+    content = await file.read()
+    if len(content) > MAX_LEAD_FILE_BYTES:
+        raise HTTPException(413, "File is larger than 15 MB. Split it or export just the rows you need.")
+    try:
+        sheets = extract_sheets(content, ext, pytesseract if OCR_AVAILABLE else None)
+    except Exception as e:  # corrupt, password-protected, or not really that format
+        raise HTTPException(422, f"Could not read this .{ext} file: {e}") from e
+    if not sheets:
+        if ext == "pdf":
+            raise HTTPException(
+                422,
+                "No text found in this PDF. It's probably a scanned image"
+                + ("" if OCR_AVAILABLE else " and OCR isn't installed on the server")
+                + ". Export the list from its source as Excel/CSV instead.",
+            )
+        raise HTTPException(422, "The workbook has no data in any sheet.")
+    return {"sheets": sheets}
 
 
 # ==========================================
@@ -1045,3 +1220,8 @@ async def spend_analysis(
         "workbook_url": f"/reports/{xlsx_filename}",
         "executive_summary_url": f"/reports/{docx_filename}",
     }
+
+
+# The web app, last so every API route above takes precedence.
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

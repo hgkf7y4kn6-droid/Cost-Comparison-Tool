@@ -13,6 +13,19 @@ services:
         value: "*"
       - key: DATA_DIR
         value: /var/data
+      # Signs sign-in tokens. Render generates a random value once; keep it
+      # stable or everyone is signed out on each change.
+      - key: AUTH_SECRET
+        generateValue: true
+      # Who can sign in: comma-separated "email:password_hash" entries.
+      # Create each hash with `python auth.py hash-password`. Set it in the
+      # Render dashboard (not in this file); the API refuses all requests until
+      # it's set.
+      - key: AUTH_USERS
+        sync: false
+      # Emails (comma-separated) who can open and edit every account.
+      - key: AUTH_MANAGERS
+        sync: false
     disk:
       name: ob-data
       mountPath: /var/data

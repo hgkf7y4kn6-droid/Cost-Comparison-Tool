@@ -1,0 +1,5 @@
+company,address,city,county,state,zip,industry,employees,website,email,phone,contact_name,contact_title,email_status,source
+Example Orthopedic Associates LLC,123 Market St,Philadelphia,Philadelphia,PA,19103,Physician practice,85,exampleortho.com,info@exampleortho.com,215-555-0100,,,,PA DOS registry
+Example Logistics Inc,500 Industrial Blvd,Allentown,Lehigh,PA,18106,Warehousing and distribution,240,examplelogistics.com,sales@examplelogistics.com,610-555-0100,,,,Outscraper geo-fence
+Example Property Group,45 King St,Lancaster,Lancaster,PA,17602,Commercial real estate management,32,examplepg.com,,717-555-0100,,,,Lancaster Chamber
+Example Software Partners,2000 Route 70,Cherry Hill,Camden,NJ,08002,Software consulting,120,examplesw.com,,856-555-0100,,,,Open Data NJ
