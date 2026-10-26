@@ -199,7 +199,9 @@
     // size; otherwise it's a case-for-case substitution.
     let current = c.competitor_price ?? "";
     if (c.competitor_cost_per_use && item.uses_per_case) current = +(c.competitor_cost_per_use * item.uses_per_case).toFixed(2);
+    const known = hub.catalog.bySku(item.sku);
     return {
+      category: known ? known.cat : hub.catalog.categorize(c.matched_category, item.name),
       id: hub.newId("ln"),
       sku: item.sku || "",
       name: item.name || "",
@@ -210,15 +212,10 @@
       freq: DEFAULT_FREQ[type],
       unitPrice: num(item.price),
       currentPrice: current,
-      cost: "",
+      cost: known ? known.cost : "",
       taxable: type !== "apparel",
       replaces: c.competitor_product || "",
     };
-  }
-
-  function blankLine() {
-    return { id: hub.newId("ln"), sku: "", name: "", type: "janitorial", tier: "", qty: 1, uom: "case",
-      freq: "month", unitPrice: 0, currentPrice: "", cost: "", taxable: true, replaces: "" };
   }
 
   // --- List -----------------------------------------------------------------
@@ -405,7 +402,7 @@
     $("qe-number").textContent = q.number;
     $("qe-status").textContent = "";
     $("quote-editor").hidden = false;
-    $("qe-calc-slot").append($("margin-card")); // calculator travels with the open quote
+    closePicker();
     renderMargin();
     renderLines();
     renderEditorMeta();
@@ -422,9 +419,32 @@
     draft = null;
     dirty = false;
     $("quote-editor").hidden = true;
-    $("margin-card-home").append($("margin-card"));
+    closePicker();
     renderMargin();
     renderList();
+  }
+
+  // --- Contract line items: lineup-style builder -----------------------------
+  // Built like a DFS lineup: the quote is a numbered list of line-item slots.
+  // Picking a slot opens the item picker (major categories + search); choosing
+  // an item pulls its cost from the catalog, and the rep prices it by margin %
+  // or sell price (each updates the other) before saving the line and moving
+  // on to the next one.
+
+  // Quote lines keep a coarse product line ("type") for account coverage and
+  // the six-way catalog category for display.
+  const CAT_TO_TYPE = { janitorial: "janitorial", breakroom: "janitorial", furniture: "furniture", promo: "apparel", office: "other", printing: "other", other: "other" };
+  const CAT_FREQ = { furniture: "once", promo: "once" }; // everything else restocks monthly
+  // Rounded up to the cent so the price never lands below the chosen margin.
+  const priceFor = (cost, m) => Math.ceil((num(cost) / (1 - Math.min(99.9, Math.max(0, num(m))) / 100)) * 100 - 1e-9) / 100;
+  const marginOf = (cost, sell) => (num(sell) > 0 ? ((num(sell) - num(cost)) / num(sell)) * 100 : null);
+  const quoteMargin = () => num(draft && hasValue(draft.defaultMargin) ? draft.defaultMargin : targetMarginPct());
+  const catLabel = (k) => (hub.catalog.CATEGORIES[k] || "");
+  const discFactor = () => 1 - Math.min(100, Math.max(0, num(draft.discountPct))) / 100;
+
+  function lineCategory(l) {
+    if (l.category) return l.category;
+    return { furniture: "furniture", apparel: "promo", janitorial: "janitorial" }[l.type] || "other";
   }
 
   function readHeader() {
@@ -435,103 +455,89 @@
     draft.taxExempt = form.elements.taxExempt.checked;
   }
 
-  function lineInput(line, field, attrs) {
-    const el = attrs.options ? document.createElement("select") : document.createElement("input");
-    if (attrs.options) {
-      for (const [v, label] of Object.entries(attrs.options)) el.append(new Option(label, v));
-    } else {
-      el.type = attrs.type || "text";
-      if (attrs.step) el.step = attrs.step;
-      if (attrs.min !== undefined) el.min = attrs.min;
-      if (attrs.placeholder) el.placeholder = attrs.placeholder;
-    }
-    if (el.type === "checkbox") el.checked = !!line[field];
-    else el.value = line[field] ?? "";
-    el.dataset.field = field;
-    el.setAttribute("aria-label", attrs.label);
-    return el;
+  function markDirty() {
+    dirty = true;
+    $("qe-status").textContent = "Unsaved changes";
+  }
+
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
   }
 
   function renderLines() {
-    const tbody = $("qe-lines");
-    tbody.replaceChildren();
-    for (const line of draft.lines) {
-      const tr = document.createElement("tr");
-      tr.dataset.id = line.id;
-      const tiers = { "": "—", good: "Good", better: "Better", best: "Best" };
-      const fields = [
-        ["sku", { label: "SKU" }],
-        ["name", { label: "Description" }],
-        ["type", { label: "Product line", options: LINE_TYPES }],
-        ["tier", { label: "Tier", options: tiers }],
-        ["qty", { label: "Quantity", type: "number", min: 0, step: "any" }],
-        ["uom", { label: "Unit of measure" }],
-        ["freq", { label: "Frequency", options: Object.fromEntries(Object.entries(FREQS).map(([k, v]) => [k, v.label])) }],
-        ["unitPrice", { label: "Unit price", type: "number", min: 0, step: "0.01" }],
-        ["cost", { label: "Unit cost (internal)", type: "number", min: 0, step: "0.01", placeholder: "cost" }],
-        ["currentPrice", { label: "Current price (customer pays today)", type: "number", min: 0, step: "0.01", placeholder: "optional" }],
-        ["taxable", { label: "Taxable", type: "checkbox" }],
-      ];
-      for (const [field, attrs] of fields) {
-        const td = document.createElement("td");
-        td.append(lineInput(line, field, attrs));
-        if (field === "name" && line.replaces) {
-          const sub = document.createElement("div");
-          sub.className = "sub";
-          sub.textContent = `Replaces: ${line.replaces}`;
-          td.append(sub);
-        }
-        tr.append(td);
-      }
-      tr.querySelector('[data-field="cost"]').parentElement.className = "internal";
-      const ext = document.createElement("td");
-      ext.className = "num ext";
-      tr.append(ext);
-      const lm = document.createElement("td");
-      lm.className = "num lmargin internal";
-      tr.append(lm);
-      const del = document.createElement("td");
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "link-btn danger-text";
-      btn.textContent = "✕";
-      btn.setAttribute("aria-label", "Remove line");
-      btn.dataset.remove = line.id;
-      del.append(btn);
-      tr.append(del);
-      tbody.append(tr);
-    }
-    $("qe-no-lines").hidden = draft.lines.length > 0;
+    const ul = $("qe-lineup");
+    ul.replaceChildren();
+    const disc = discFactor();
+    const target = targetMarginPct();
+    draft.lines.forEach((l, i) => {
+      const li = el("li", "lineup-row filled");
+      li.dataset.id = l.id;
+      const main = el("button", "lineup-main");
+      main.type = "button";
+      main.dataset.edit = l.id;
+      main.setAttribute("aria-label", `Line item ${i + 1}: ${l.name || "unnamed"}. Edit`);
+      const who = el("span", "lineup-player");
+      who.append(el("strong", "lineup-name", l.name || "(unnamed item)"));
+      const meta = [l.sku, catLabel(lineCategory(l)), `${num(l.qty)} × ${l.uom || "each"}`, (FREQS[l.freq] || FREQS.once).label];
+      if (l.replaces) meta.push(`replaces ${l.replaces}`);
+      who.append(el("span", "lineup-meta", meta.filter(Boolean).join(" · ")));
+      const nums = el("span", "lineup-numbers");
+      nums.append(el("strong", "lineup-price", `${money(l.unitPrice)} / ${l.uom || "each"}`));
+      const m = lineMargin(l, disc);
+      const ext = num(l.qty) * num(l.unitPrice) * disc;
+      const mt = el("span", "lineup-margin", m === null ? `no cost · ${money(ext)}` : `${pct(m)} margin · ${money(ext)}`);
+      if (m !== null && m < target) mt.classList.add("warn");
+      if (m !== null && m < 0) mt.classList.add("danger-text");
+      nums.append(mt);
+      main.append(el("span", "lineup-slot", `#${i + 1}`), who, nums);
+      const rm = el("button", "lineup-remove", "×");
+      rm.type = "button";
+      rm.dataset.remove = l.id;
+      rm.setAttribute("aria-label", `Remove line item ${i + 1}`);
+      li.append(main, rm);
+      ul.append(li);
+    });
+    // The next open slot, always last.
+    const open = el("li", "lineup-row open");
+    const pick = el("button", "lineup-main");
+    pick.type = "button";
+    pick.dataset.pick = "new";
+    pick.append(el("span", "lineup-slot", `#${draft.lines.length + 1}`), el("span", "lineup-open-select", "Select item ›"));
+    open.append(pick);
+    ul.append(open);
+    $("qe-default-margin").value = String(quoteMargin());
     renderTotals();
   }
 
-  function readLines() {
-    for (const tr of $("qe-lines").querySelectorAll("tr[data-id]")) {
-      const line = draft.lines.find((l) => l.id === tr.dataset.id);
-      if (!line) continue;
-      for (const el of tr.querySelectorAll("[data-field]")) {
-        const f = el.dataset.field;
-        if (el.type === "checkbox") line[f] = el.checked;
-        else if (f === "qty" || f === "unitPrice") line[f] = num(el.value);
-        else if (f === "currentPrice" || f === "cost") line[f] = el.value === "" ? "" : num(el.value);
-        else line[f] = el.value.trim();
-      }
+  function renderLineupTotals(t) {
+    const target = targetMarginPct();
+    const items = [
+      ["Line items", String(draft.lines.length)],
+      ["Subtotal", money(t.subtotal - t.discount)],
+      ["Margin 🔒", t.marginPct === null ? "—" : pct(t.marginPct), t.marginPct !== null && t.marginPct < target ? "warn" : ""],
+      ["Gross profit / order 🔒", t.marginPct === null ? "—" : money(t.grossProfit)],
+      ["Annual recurring", money(t.recurring)],
+      ["Order total", money(t.orderTotal)],
+    ];
+    const box = $("qe-lineup-totals");
+    box.replaceChildren();
+    for (const [label, value, cls] of items) {
+      const d = el("div", "lineup-total");
+      d.append(el("span", "lineup-total-label", label), el("strong", `lineup-total-value ${cls || ""}`, value));
+      box.append(d);
     }
+    $("qe-lines-aside").textContent = draft.lines.length
+      ? `${draft.lines.length} item${draft.lines.length === 1 ? "" : "s"}${t.marginPct === null ? "" : ` · ${pct(t.marginPct)}`}`
+      : "No items yet";
   }
 
   function renderTotals() {
     const t = totals(draft);
-    const disc = 1 - Math.min(100, Math.max(0, num(draft.discountPct))) / 100;
-    for (const tr of $("qe-lines").querySelectorAll("tr[data-id]")) {
-      const line = draft.lines.find((l) => l.id === tr.dataset.id);
-      if (!line) continue;
-      tr.querySelector(".ext").textContent = money(num(line.qty) * num(line.unitPrice) * disc);
-      const m = lineMargin(line, disc);
-      const cell = tr.querySelector(".lmargin");
-      cell.textContent = m === null ? "—" : pct(m);
-      cell.classList.toggle("warn", m !== null && m < targetMarginPct());
-      cell.classList.toggle("danger-text", m !== null && m < 0);
-    }
+    renderLineupTotals(t);
+    renderPickerBar(t);
     const target = targetMarginPct();
     const rows = [
       ["Subtotal", money(t.subtotal)],
@@ -557,19 +563,15 @@
     const box = $("qe-totals");
     box.replaceChildren();
     for (const [label, value, cls] of rows) {
-      const div = document.createElement("div");
-      if (cls) div.className = cls;
-      const a = document.createElement("span");
-      a.textContent = label;
-      const b = document.createElement("strong");
-      b.textContent = value;
-      div.append(a, b);
+      const div = el("div", cls || "");
+      div.append(el("span", "", label), el("strong", "", value));
       box.append(div);
     }
   }
 
   function renderEditorMeta() {
     $("qe-company").textContent = draft.company || "(no customer)";
+    $("qe-customer-aside").textContent = [draft.company, draft.contactName].filter(Boolean).join(" · ") || "Choose a customer";
     const badge = $("qe-badge");
     badge.replaceChildren(statusBadge(draft));
     $("qe-loss-wrap").hidden = draft.status !== "lost";
@@ -597,7 +599,6 @@
 
   form.addEventListener("input", (e) => {
     if (!draft) return;
-    dirty = true;
     if (e.target.name === "customer") {
       const [kind, id] = e.target.value.split(":");
       const rec = kind === "account" ? findAccount(id) : findLead(id);
@@ -607,50 +608,315 @@
       }
     }
     readHeader();
-    readLines();
-    if (e.target.dataset.field === "type") {
-      // Apparel is generally sales-tax exempt in PA/NJ; furniture is usually one-time.
-      const line = draft.lines.find((l) => l.id === e.target.closest("tr").dataset.id);
-      line.taxable = line.type !== "apparel";
-      line.freq = DEFAULT_FREQ[line.type];
-      renderLines();
-    }
-    renderTotals();
+    if (e.target.name === "discountPct") renderLines();
+    else renderTotals();
     renderEditorMeta();
-    $("qe-status").textContent = "Unsaved changes";
+    markDirty();
   });
 
-  $("qe-lines").addEventListener("click", (e) => {
-    const id = e.target.dataset.remove;
-    if (!id) return;
-    readLines();
-    draft.lines = draft.lines.filter((l) => l.id !== id);
-    dirty = true;
-    renderLines();
+  $("qe-lineup").addEventListener("click", (e) => {
+    const rm = e.target.closest("[data-remove]");
+    if (rm) {
+      draft.lines = draft.lines.filter((l) => l.id !== rm.dataset.remove);
+      markDirty();
+      renderLines();
+      return;
+    }
+    const edit = e.target.closest("[data-edit]");
+    if (edit) return openPicker(edit.dataset.edit);
+    if (e.target.closest("[data-pick]")) openPicker(null);
   });
 
-  $("qe-add-line").addEventListener("click", () => {
-    readLines();
-    draft.lines.push(blankLine());
-    dirty = true;
+  // One margin for every item: new items start at it, and "Apply to all"
+  // re-prices every line that has a cost.
+  $("qe-default-margin").addEventListener("input", (e) => {
+    if (!draft || e.target.value.trim() === "") return;
+    draft.defaultMargin = Math.min(99.9, Math.max(0, num(e.target.value)));
+    markDirty();
+  });
+  $("qe-apply-margin").addEventListener("click", () => {
+    const m = quoteMargin();
+    const costed = draft.lines.filter((l) => hasValue(l.cost));
+    if (!costed.length) {
+      $("qe-status").textContent = "No line items have a cost yet — the margin will apply as you add items.";
+      return;
+    }
+    if (!confirm(`Re-price ${costed.length} line item${costed.length === 1 ? "" : "s"} to a ${pct(m)} margin? Prices you set by hand will be replaced.`)) return;
+    for (const l of costed) l.unitPrice = priceFor(l.cost, m);
+    markDirty();
     renderLines();
-    $("qe-lines").lastElementChild.querySelector("input").focus();
+    $("qe-status").textContent = `Re-priced ${costed.length} line item${costed.length === 1 ? "" : "s"} to ${pct(m)} margin. Unsaved changes.`;
   });
 
   for (const tier of ["good", "better", "best"]) {
     $(`qe-add-${tier}`).addEventListener("click", () => {
       const line = state.lastComparison && lineFromComparison(state.lastComparison, tier);
       if (!line) return;
-      readLines();
       draft.lines.push(line);
-      dirty = true;
+      markDirty();
       renderLines();
     });
   }
 
+  // --- Item picker -------------------------------------------------------------
+
+  const ip = { lineId: null, cats: new Set(), item: null, category: "other" };
+  const ipInputs = ["ip-name", "ip-sku", "ip-cost", "ip-margin", "ip-sell", "ip-qty", "ip-uom", "ip-current"].reduce((o, id) => ((o[id] = $(id)), o), {});
+  for (const [k, v] of Object.entries(FREQS)) $("ip-freq").append(new Option(v.label, k));
+  const val = (id) => (ipInputs[id].value.trim() === "" ? null : Number(ipInputs[id].value));
+
+  function openPicker(lineId) {
+    const line = lineId ? draft.lines.find((l) => l.id === lineId) : null;
+    ip.lineId = line ? line.id : null;
+    const slot = line ? draft.lines.indexOf(line) + 1 : draft.lines.length + 1;
+    $("ip-title").textContent = `Line item #${slot}`;
+    $("ip-remove").hidden = !line;
+    $("item-picker").hidden = false;
+    if (line) showPrice({ line });
+    else showChoose();
+    renderPickerBar();
+  }
+
+  function closePicker() {
+    $("item-picker").hidden = true;
+    ip.lineId = null;
+    ip.item = null;
+  }
+
+  function showChoose() {
+    $("ip-choose").hidden = false;
+    $("ip-price").hidden = true;
+    $("ip-step").textContent = "Choose an item";
+    renderCats();
+    renderResults();
+    setTimeout(() => $("ip-search").focus(), 0);
+  }
+
+  function renderCats() {
+    const counts = hub.catalog.counts();
+    const box = $("ip-cats");
+    box.replaceChildren();
+    for (const [key, label] of Object.entries(hub.catalog.CATEGORIES)) {
+      if (key === "other" && !counts.other) continue;
+      const lab = el("label", `ip-cat${ip.cats.has(key) ? " on" : ""}`);
+      const box2 = document.createElement("input");
+      box2.type = "checkbox";
+      box2.value = key;
+      box2.checked = ip.cats.has(key);
+      lab.append(box2, el("span", "ip-cat-name", label), el("span", "ip-cat-count", String(counts[key] || 0)));
+      box.append(lab);
+    }
+    $("ip-cats-clear").hidden = !ip.cats.size;
+  }
+
+  function renderResults() {
+    const q = $("ip-search").value;
+    const { results, total } = hub.catalog.search(ip.cats, q);
+    const ul = $("ip-results");
+    ul.replaceChildren();
+    const empty = !hub.catalog.size();
+    $("ip-empty").hidden = !empty;
+    const scope = ip.cats.size ? [...ip.cats].map(catLabel).join(", ") : "all categories";
+    $("ip-count").textContent = empty ? "" :
+      `${total.toLocaleString()} item${total === 1 ? "" : "s"} in ${scope}${q.trim() ? ` matching “${q.trim()}”` : ""}${total > results.length ? ` — showing the first ${results.length}, refine to see more` : ""}`;
+    for (const it of results) {
+      const li = el("li", "ip-row");
+      const b = el("button", "ip-item-btn");
+      b.type = "button";
+      b.dataset.sku = it.sku || it.id;
+      const left = el("span", "ip-item-text");
+      left.append(el("strong", "", it.name),
+        el("span", "lineup-meta", [it.sku, catLabel(it.cat), it.uom, it.pack].filter(Boolean).join(" · ")));
+      const right = el("span", "ip-item-cost");
+      right.append(el("strong", "", money(it.cost)), el("span", "lineup-meta", `cost 🔒 → ${money(priceFor(it.cost, quoteMargin()))} at ${pct(quoteMargin())}`));
+      b.append(left, right, el("span", "ip-plus", "+"));
+      b._item = it;
+      li.append(b);
+      ul.append(li);
+    }
+  }
+
+  // Fills the pricing step. src: { line } to edit a saved line, { item } for a
+  // catalog item, or {} for a custom item. Changing the item on an existing line
+  // keeps its quantity, frequency and current price.
+  function showPrice(src) {
+    const keep = ip.lineId ? draft.lines.find((l) => l.id === ip.lineId) : null;
+    $("ip-choose").hidden = true;
+    $("ip-price").hidden = false;
+    $("ip-step").textContent = "Price this item";
+    let v;
+    if (src.line) {
+      const l = src.line;
+      v = { name: l.name, sku: l.sku, cost: l.cost, sell: l.unitPrice, qty: l.qty, uom: l.uom, freq: l.freq, current: l.currentPrice, taxable: l.taxable, category: lineCategory(l) };
+      v.margin = hasValue(l.cost) ? marginOf(l.cost, l.unitPrice) : quoteMargin();
+    } else if (src.item) {
+      const it = src.item;
+      const m = quoteMargin();
+      v = { name: it.name, sku: it.sku, cost: it.cost, margin: m, sell: priceFor(it.cost, m), qty: keep ? keep.qty : 1, uom: it.uom || "each",
+        freq: keep ? keep.freq : CAT_FREQ[it.cat] || "month", current: keep ? keep.currentPrice : "", taxable: keep ? keep.taxable : true, category: it.cat };
+    } else {
+      v = { name: "", sku: "", cost: "", margin: quoteMargin(), sell: "", qty: keep ? keep.qty : 1, uom: "each", freq: "month", current: "", taxable: true, category: "other" };
+    }
+    ip.item = src.item || null;
+    ip.category = v.category;
+    ipInputs["ip-name"].value = v.name || "";
+    ipInputs["ip-sku"].value = v.sku || "";
+    ipInputs["ip-cost"].value = hasValue(v.cost) ? num(v.cost).toFixed(2) : "";
+    ipInputs["ip-margin"].value = v.margin === null || v.margin === undefined ? "" : (Math.round(v.margin * 10) / 10).toString();
+    ipInputs["ip-sell"].value = hasValue(v.sell) && v.sell !== 0 ? num(v.sell).toFixed(2) : "";
+    ipInputs["ip-qty"].value = v.qty ?? 1;
+    ipInputs["ip-uom"].value = v.uom || "each";
+    ipInputs["ip-current"].value = hasValue(v.current) ? v.current : "";
+    $("ip-freq").value = v.freq || "month";
+    $("ip-taxable").checked = v.taxable !== false;
+    $("ip-cat-label").textContent = catLabel(v.category) || "Custom item";
+    $("ip-from-catalog").hidden = !ip.item;
+    renderPriceResults();
+    setTimeout(() => (v.name ? ipInputs["ip-margin"] : ipInputs["ip-name"]).focus(), 0);
+  }
+
+  function renderPriceResults() {
+    const cost = val("ip-cost");
+    const sell = val("ip-sell");
+    const qty = val("ip-qty") ?? 0;
+    const ok = cost !== null && sell !== null && sell > 0;
+    const m = ok ? marginOf(cost, sell) : null;
+    const disc = discFactor();
+    $("ip-profit").textContent = ok ? money(sell - cost) : "—";
+    $("ip-ext").textContent = sell !== null ? money(sell * qty) : "—";
+    $("ip-markup").textContent = ok && cost > 0 ? pct(((sell - cost) / cost) * 100) : "—";
+    $("ip-gp").textContent = ok ? money((sell - cost) * qty) : "—";
+    const target = targetMarginPct();
+    const note = $("ip-vs-target");
+    note.className = "hint";
+    if (m === null) note.textContent = cost === null ? "Enter a cost to see the margin." : "";
+    else {
+      const diff = m - target;
+      note.textContent = Math.abs(diff) < 0.05 ? `On your ${pct(target)} target.` : `${Math.abs(diff).toFixed(1)} pts ${diff > 0 ? "above" : "below"} your ${pct(target)} target.`;
+      if (diff >= 0.05) note.className = "hint good";
+      else if (diff <= -0.05) note.className = "hint warn";
+      if (disc < 1) note.textContent += ` The quote's ${num(draft.discountPct)}% discount brings this line to ${pct(marginOf(cost, sell * disc))}.`;
+    }
+  }
+
+  // Margin and sell price drive each other; cost re-prices at the current margin.
+  ipInputs["ip-margin"].addEventListener("input", () => {
+    const cost = val("ip-cost");
+    const m = val("ip-margin");
+    if (cost !== null && m !== null) ipInputs["ip-sell"].value = priceFor(cost, m).toFixed(2);
+    renderPriceResults();
+  });
+  ipInputs["ip-sell"].addEventListener("input", () => {
+    const cost = val("ip-cost");
+    const sell = val("ip-sell");
+    if (cost !== null && sell !== null && sell > 0) ipInputs["ip-margin"].value = (Math.round(marginOf(cost, sell) * 10) / 10).toString();
+    renderPriceResults();
+  });
+  ipInputs["ip-cost"].addEventListener("input", () => {
+    const cost = val("ip-cost");
+    const m = val("ip-margin");
+    if (cost !== null && m !== null) ipInputs["ip-sell"].value = priceFor(cost, m).toFixed(2);
+    renderPriceResults();
+  });
+  for (const id of ["ip-qty"]) ipInputs[id].addEventListener("input", renderPriceResults);
+
+  function savePickedLine() {
+    const name = ipInputs["ip-name"].value.trim();
+    const sell = val("ip-sell");
+    if (!name) {
+      $("ip-error").textContent = "Give the item a name.";
+      ipInputs["ip-name"].focus();
+      return false;
+    }
+    if (sell === null || !(sell > 0)) {
+      $("ip-error").textContent = "Set a sell price (or a margin, once there's a cost).";
+      ipInputs["ip-sell"].focus();
+      return false;
+    }
+    $("ip-error").textContent = "";
+    const cost = val("ip-cost");
+    const category = ip.category || "other";
+    const fields = {
+      sku: ipInputs["ip-sku"].value.trim(),
+      name,
+      category,
+      type: CAT_TO_TYPE[category] || "other",
+      qty: val("ip-qty") ?? 1,
+      uom: ipInputs["ip-uom"].value.trim() || "each",
+      freq: $("ip-freq").value,
+      unitPrice: sell,
+      cost: cost === null ? "" : cost,
+      currentPrice: val("ip-current") === null ? "" : val("ip-current"),
+      taxable: $("ip-taxable").checked,
+    };
+    const existing = ip.lineId && draft.lines.find((l) => l.id === ip.lineId);
+    if (existing) Object.assign(existing, fields);
+    else draft.lines.push({ id: hub.newId("ln"), tier: "", replaces: "", ...fields });
+    markDirty();
+    renderLines();
+    return true;
+  }
+
+  $("ip-save").addEventListener("click", () => {
+    if (savePickedLine()) closePicker();
+  });
+  $("ip-save-next").addEventListener("click", () => {
+    if (!savePickedLine()) return;
+    openPicker(null);
+  });
+  $("ip-back").addEventListener("click", closePicker);
+  $("ip-change").addEventListener("click", showChoose);
+  $("ip-remove").addEventListener("click", () => {
+    if (!ip.lineId) return;
+    draft.lines = draft.lines.filter((l) => l.id !== ip.lineId);
+    markDirty();
+    renderLines();
+    closePicker();
+  });
+  $("ip-custom").addEventListener("click", () => showPrice({}));
+  $("ip-search").addEventListener("input", renderResults);
+  $("ip-cats").addEventListener("change", (e) => {
+    if (e.target.checked) ip.cats.add(e.target.value);
+    else ip.cats.delete(e.target.value);
+    renderCats();
+    renderResults();
+  });
+  $("ip-cats-clear").addEventListener("click", () => {
+    ip.cats.clear();
+    renderCats();
+    renderResults();
+  });
+  $("ip-results").addEventListener("click", (e) => {
+    const b = e.target.closest(".ip-item-btn");
+    if (b && b._item) showPrice({ item: b._item });
+  });
+  $("ip-load-sample").addEventListener("click", () => {
+    hub.catalog.loadSample();
+    renderCats();
+    renderResults();
+  });
+  // Esc steps back out of the picker before it closes the whole quote panel.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || $("item-picker").hidden) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (!$("ip-price").hidden && !ip.lineId) showChoose();
+    else closePicker();
+  }, true);
+
+  function renderPickerBar(t = draft && totals(draft)) {
+    if (!t || $("item-picker").hidden) return;
+    const target = targetMarginPct();
+    $("ip-bar-lines").textContent = String(draft.lines.length);
+    $("ip-bar-subtotal").textContent = money(t.subtotal - t.discount);
+    const mEl = $("ip-bar-margin");
+    mEl.textContent = t.marginPct === null ? "—" : pct(t.marginPct);
+    mEl.className = `picker-bar-value ${t.marginPct !== null && t.marginPct < target ? "warn" : ""}`;
+    $("ip-bar-target").textContent = `target ${pct(target)}`;
+  }
+
   function commit(message) {
     readHeader();
-    readLines();
     const q = state.quotes.find((x) => x.id === openId);
     if (!q) return null;
     const becameWon = q.status !== "won" && draft.status === "won";
@@ -693,6 +959,7 @@
     e.preventDefault();
     commit();
   });
+  $("qe-save").addEventListener("click", () => commit());
 
   function setStatus(status, message) {
     if (!draft) return;
@@ -799,7 +1066,6 @@
       vs.textContent = "";
     }
     $("m-margin").className = ok && margin < 0 ? "danger-text" : "";
-    $("m-to-quote").hidden = !(draft && ok);
   }
 
   function saveTarget() {
@@ -827,21 +1093,6 @@
   mQty.addEventListener("input", renderMargin);
   $("margin-form").addEventListener("submit", (e) => e.preventDefault());
   renderMargin();
-
-  $("m-to-quote").addEventListener("click", () => {
-    const sell = parseNum(mSell);
-    if (!draft || sell === null) return;
-    readLines();
-    const line = blankLine();
-    line.unitPrice = sell;
-    line.cost = parseNum(mCost) ?? "";
-    line.qty = parseNum(mQty) || 1;
-    draft.lines.push(line);
-    dirty = true;
-    $("qe-status").textContent = "Unsaved changes";
-    renderLines();
-    $("qe-lines").lastElementChild.querySelector("input").focus();
-  });
 
   // --- Printable proposal ---------------------------------------------------
 

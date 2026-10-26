@@ -7,6 +7,24 @@
   const state = hub.state;
   const { money } = hub;
 
+  // Once a quote is won, the account's first job is Customer Onboarding: a
+  // checklist that, when finished, makes the account Active and schedules the
+  // first business review.
+  const ONBOARDING_ACTION = "Customer Onboarding";
+  const ONBOARDING_STEPS = [
+    ["kickoff", "Kickoff meeting held with the decision-maker"],
+    ["account", "Customer account set up (bill-to, ship-to, customer number)"],
+    ["contacts", "Ordering, accounts-payable and delivery contacts confirmed"],
+    ["pricing", "Contract pricing loaded from the won proposal"],
+    ["tax", "Tax-exempt certificate collected, or confirmed taxable"],
+    ["delivery", "Delivery locations and schedule confirmed"],
+    ["first-order", "First order placed and delivered"],
+  ];
+  // Accounts created before onboarding existed carried this next action.
+  for (const a of window.SalesHub.state.accounts) {
+    if (a.nextAction === "Kickoff / onboarding call") a.nextAction = ONBOARDING_ACTION;
+  }
+
   const STATUSES = {
     onboarding: "Onboarding",
     active: "Active",
@@ -74,7 +92,7 @@
       locations: 1,
       terms: "Net 30",
       notes: "",
-      nextAction: "Kickoff / onboarding call",
+      nextAction: ONBOARDING_ACTION,
       nextActionDate: hub.addDays(hub.today(), 3),
       activities: [],
       created: now,
@@ -290,7 +308,75 @@
     "city", "state", "zip", "locations", "terms", "startDate", "renewalDate", "nextAction", "nextActionDate",
     "otherContacts", "notes"];
 
-  function openAccount(id) {
+  function onboardingProgress(acct) {
+    const done = ONBOARDING_STEPS.filter(([k]) => (acct.onboarding || {})[k]).length;
+    return { done, total: ONBOARDING_STEPS.length };
+  }
+
+  function renderOnboarding(acct) {
+    const card = $("ad-onboarding-card");
+    // Shown while onboarding, or when any step has been ticked.
+    const relevant = acct.status === "onboarding" || Object.keys(acct.onboarding || {}).length > 0;
+    card.hidden = !relevant;
+    if (!relevant) return;
+    const { done, total } = onboardingProgress(acct);
+    $("ad-onboarding-aside").textContent = `${done}/${total} steps`;
+    $("ad-onboarding-bar").style.width = `${Math.round((done / total) * 100)}%`;
+    const ul = $("ad-onboarding");
+    ul.replaceChildren();
+    for (const [key, label] of ONBOARDING_STEPS) {
+      const li = document.createElement("li");
+      const lab = document.createElement("label");
+      lab.className = "check";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.dataset.step = key;
+      const when = (acct.onboarding || {})[key];
+      box.checked = !!when;
+      const text = document.createElement("span");
+      text.textContent = label;
+      lab.append(box, text);
+      if (when) {
+        const d = document.createElement("small");
+        d.className = "muted";
+        d.textContent = ` — ${hub.fmtDate(when)}`;
+        lab.append(d);
+      }
+      li.append(lab);
+      ul.append(li);
+    }
+    $("ad-onboarding-done").hidden = done < total;
+  }
+
+  $("ad-onboarding").addEventListener("change", (e) => {
+    const key = e.target.dataset.step;
+    const acct = findAccount(openId);
+    if (!key || !acct) return;
+    acct.onboarding = acct.onboarding || {};
+    const label = ONBOARDING_STEPS.find(([k]) => k === key)[1];
+    if (e.target.checked) {
+      acct.onboarding[key] = hub.today();
+      log(acct.id, "note", `Onboarding: ${label}`);
+    } else {
+      delete acct.onboarding[key];
+    }
+    const { done, total } = onboardingProgress(acct);
+    if (done === total && acct.status === "onboarding") {
+      acct.status = "active";
+      acct.nextAction = "First business review";
+      acct.nextActionDate = hub.addDays(hub.today(), 90);
+      log(acct.id, "note", "Customer onboarding complete — account is Active.");
+      form.elements.status.value = acct.status;
+      form.elements.nextAction.value = acct.nextAction;
+      form.elements.nextActionDate.value = acct.nextActionDate;
+    } else if (done < total && acct.status === "onboarding") {
+      acct.nextAction = ONBOARDING_ACTION;
+    }
+    acct.updated = new Date().toISOString();
+    hub.save();
+  });
+
+  function openAccount(id, options = {}) {
     const acct = findAccount(id);
     if (!acct) return;
     window.showTab("accounts");
@@ -303,6 +389,10 @@
     $("account-detail").hidden = false;
     renderDetailExtras();
     renderList();
+    if (options.focus === "onboarding" && !$("ad-onboarding-card").hidden) {
+      hub.cards.open($("ad-onboarding-card"));
+      requestAnimationFrame(() => $("ad-onboarding-card").scrollIntoView({ block: "start" }));
+    }
   }
 
   function closeAccount() {
@@ -368,6 +458,8 @@
       ql.append(li);
     }
     $("ad-no-quotes").hidden = qs.length > 0;
+    $("ad-quotes-aside").textContent = qs.length ? `${qs.length}` : "";
+    renderOnboarding(acct);
 
     // Activity timeline, newest first
     const tl = $("ad-activity");
@@ -393,6 +485,7 @@
       tl.append(li);
     }
     $("ad-no-activity").hidden = acts.length > 0;
+    $("ad-activity-aside").textContent = acts.length ? `${acts.length} logged` : "";
   }
 
   form.addEventListener("submit", (e) => {
@@ -447,6 +540,8 @@
     upsertFromQuote,
     log,
     open: openAccount,
+    onboardingProgress,
+    ONBOARDING_ACTION,
   };
 
   hub.on(renderAll);

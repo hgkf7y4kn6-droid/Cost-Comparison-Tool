@@ -62,6 +62,10 @@
       const days = q.sentDate ? daysSince(q.sentDate) : 0;
       return { label: "Follow up on proposal", hint: `${q.number} sent ${days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`}`, run: () => hub.quotes.open(q.id), urgent: days >= 7 };
     }
+    if (r.acct && r.acct.status === "onboarding") {
+      const { done, total } = hub.accounts.onboardingProgress(r.acct);
+      return { label: "Customer Onboarding", hint: `${done} of ${total} steps done`, run: () => hub.accounts.open(r.acct.id, { focus: "onboarding" }) };
+    }
     if (r.acct) {
       const due = r.acct.nextActionDate;
       const late = due && due < hub.today();

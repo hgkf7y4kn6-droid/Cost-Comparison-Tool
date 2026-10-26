@@ -20,28 +20,39 @@
   }
 
   // item: { title, detail, tone ("late" | "soon" | ""), actions: [[label, fn, primary?]] }
-  function card(title, subtitle, items, emptyText) {
-    const sec = document.createElement("section");
-    sec.className = "today-card";
+  // An expandable card (cards.js): title + subtitle, item count on the right.
+  // Cards with items start open; the rep's open/closed choice is remembered.
+  function card(id, title, subtitle, items, emptyText) {
+    const outer = document.createElement("section");
+    outer.className = "xcard today-card";
+    outer.dataset.card = `today-${id}`;
+    outer.dataset.open = items.length ? "true" : "false";
+    const head = document.createElement("div");
+    head.className = "xcard-head";
+    const titles = document.createElement("div");
+    titles.className = "xcard-titles";
     const h = document.createElement("h3");
     h.textContent = title;
-    const count = document.createElement("span");
-    count.className = "count";
-    count.textContent = items.length;
-    h.append(" ", count);
-    sec.append(h);
+    titles.append(h);
     if (subtitle) {
       const p = document.createElement("p");
-      p.className = "hint";
+      p.className = "xcard-sub";
       p.textContent = subtitle;
-      sec.append(p);
+      titles.append(p);
     }
+    const count = document.createElement("span");
+    count.className = `xcard-aside count${items.length ? " has" : ""}`;
+    count.textContent = items.length;
+    head.append(titles, count);
+    const sec = document.createElement("div");
+    sec.className = "xcard-body";
+    outer.append(head, sec);
     if (!items.length) {
       const p = document.createElement("p");
       p.className = "today-empty";
       p.textContent = emptyText;
       sec.append(p);
-      return sec;
+      return outer;
     }
     const ul = document.createElement("ul");
     ul.className = "today-list";
@@ -75,7 +86,7 @@
       more.textContent = `+ ${items.length - MAX_ITEMS} more`;
       sec.append(more);
     }
-    return sec;
+    return outer;
   }
 
   const work = (kind, id, then) => () => {
@@ -102,7 +113,8 @@
           title: a.company,
           detail: `${a.nextAction || "Follow up"} — ${late ? `overdue since ${hub.fmtDate(a.nextActionDate)}` : a.nextActionDate === today ? "due today" : `due ${hub.fmtDate(a.nextActionDate)}`}`,
           tone: late ? "late" : a.nextActionDate === today ? "soon" : "",
-          actions: [["Open account", work("account", a.id, () => hub.accounts.open(a.id)), true]],
+          actions: [[a.status === "onboarding" ? "Onboarding" : "Open account",
+            work("account", a.id, () => hub.accounts.open(a.id, { focus: a.status === "onboarding" ? "onboarding" : "" })), true]],
         };
       });
 
@@ -195,13 +207,14 @@
 
     const grid = $("today-grid");
     grid.replaceChildren(
-      card("Follow-ups", "Next actions on your accounts, due within a week.", followUps, "Nothing due this week."),
-      card("Proposals waiting on the customer", "Expired and expiring first, then the ones gone quiet.", waiting, "No proposals out right now."),
-      card("Ready to quote", "Leads you've talked to that don't have a quote yet.", toQuote, "Every engaged lead has a quote."),
-      card("Drafts to finish", "Quotes not sent yet, oldest first.", drafts, "No drafts waiting."),
-      card("Leads to reach out to", "Best fit first; verified emails at the top.", outreach, "No new leads — import a list on the Prospecting tab."),
-      card("Accounts needing care", "Upcoming renewals and accounts you haven't touched lately.", care, "All accounts are in good shape."),
+      card("followups", "Follow-ups", "Next actions on your accounts, due within a week.", followUps, "Nothing due this week."),
+      card("proposals", "Proposals waiting on the customer", "Expired and expiring first, then the ones gone quiet.", waiting, "No proposals out right now."),
+      card("ready", "Ready to quote", "Leads you've talked to that don't have a quote yet.", toQuote, "Every engaged lead has a quote."),
+      card("drafts", "Drafts to finish", "Quotes not sent yet, oldest first.", drafts, "No drafts waiting."),
+      card("outreach", "Leads to reach out to", "Best fit first; verified emails at the top.", outreach, "No new leads — import a list on the Prospecting tab."),
+      card("care", "Accounts needing care", "Upcoming renewals and accounts you haven't touched lately.", care, "All accounts are in good shape."),
     );
+    hub.cards.init(grid);
 
     const empty = !state.leads.length && !state.quotes.length && !state.accounts.length;
     $("today-start").hidden = !empty;
@@ -213,12 +226,12 @@
   });
   $("start-margin").addEventListener("click", () => {
     window.showTab("quotes");
+    hub.cards.open($("m-target"));
     $("m-target").focus();
   });
   $("start-profile").addEventListener("click", () => {
     window.showTab("quotes");
-    const details = $("rep-profile").closest("details");
-    if (details) details.open = true;
+    hub.cards.open($("rep-profile"));
     $("rep-profile").elements.repName.focus();
   });
 

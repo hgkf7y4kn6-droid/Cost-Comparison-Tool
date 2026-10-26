@@ -21,7 +21,8 @@ that moves it forward (find the decision-maker → send outreach → run a cost
 comparison → build the quote → send it → follow up → onboard). It changes as
 the deal does; pick a different deal from its menu. Lead, quote and account
 details open as side panels over the list (Esc or a click outside closes
-them).
+them). Sections are expandable cards (as in DFS Riches): click a card's header
+to open or minimize it; each card remembers its state in your browser.
 
 **Today** (the default tab) lists what needs attention across all stages:
 account follow-ups due this week, proposals waiting on the customer (expired and
@@ -65,10 +66,28 @@ The stages themselves, one tab each:
    cost-per-use when uses-per-case is known on both sides).
 3. **Proposals & Quotes** (`frontend/quotes.js`) — quotes for qualified leads
    or existing accounts:
-   - Line items with product line, tier, quantity, unit price, the customer's
-     current price, and frequency (one-time vs. monthly/quarterly/annual), so
-     recurring janitorial restock and one-time furniture installs are valued
-     separately.
+   - **Building a proposal works like building a DFS lineup.** Contract line
+     items are numbered slots: select "#1 Select item ›" and the item picker
+     opens with the six major categories (Janitorial Supplies, Breakroom
+     Supplies, Office Supplies, Printing Solutions, Print and Promotional,
+     Furniture) in one list (pick any number) beside an item search. Choosing
+     an item pulls its cost from the **item catalog**; set the margin % or the
+     sell price and the other updates (price = cost ÷ (1 − margin), rounded up
+     to the cent). **Save line item** returns to the lineup; **Save & next line
+     item** opens the next slot. "Margin for every item" sets the starting
+     margin for new items (defaults to your saved target), and **Apply to all
+     line items** re-prices every line with a cost. Items not in the catalog
+     can be added as custom items.
+   - Each line also has quantity, unit, frequency (one-time vs.
+     monthly/quarterly/annual, so restock and one-time furniture are valued
+     separately), the customer's current price and a taxable flag.
+   - **Item catalog** card: import your cost file (CSV/Excel; needs an item
+     name/description and cost; SKU, category, list price, unit and pack are
+     used if present; see `frontend/catalog_items_template.csv`). Items are filed
+     into the six categories from the file's category or the item name;
+     re-imports merge by SKU and update costs. "Load sample items" adds a
+     made-up catalog (SKUs `SAMPLE-…`) for trying the builder. The catalog is
+     stored in this browser.
    - Discount, delivery, and sales tax defaulted from the customer's location
      (Philadelphia 8%, rest of PA 6%, NJ 6.625%; apparel lines default to
      non-taxable; tax-exempt toggle). Confirm rates per deal.
@@ -91,9 +110,13 @@ The stages themselves, one tab each:
      sessions), enter a cost and the sell price fills in at that target
      (cost ÷ (1 − margin), rounded up to the cent). Type your own sell price to
      see the margin, profit per unit / total, markup, and how far it is from
-     target. "Add as a line on the open quote" drops the price into the quote.
+     target.
 4. **Accounts** (`frontend/accounts.js`) — customers from won quotes (or added
-   by hand): status (Onboarding / Active / At risk / Churned), owner, contacts,
+   by hand). A newly won account starts in **Customer Onboarding**: a
+   seven-step checklist (kickoff, account setup, contacts, contract pricing,
+   tax certificate, delivery, first order) that the deal bar points to; ticking
+   the last step makes the account Active and schedules a first business
+   review in 90 days. Accounts also track status (Onboarding / Active / At risk / Churned), owner, contacts,
    renewal date, next action, and an activity log. Shows recurring and one-time
    value and savings delivered from won quotes, product-line coverage with
    cross-sell gaps (and who to talk to), follow-ups due this week, accounts

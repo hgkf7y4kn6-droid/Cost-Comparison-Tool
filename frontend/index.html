@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Office Basics Sales Hub</title>
+  <title>Sales Hub</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="app-header">
-    <h1>Office Basics Sales Hub</h1>
+    <h1>Sales Hub</h1>
     <div id="auth-bar" class="auth-bar" hidden>
       Signed in as <strong id="auth-user"></strong>
       <button type="button" class="link-btn" id="auth-signout">Sign out</button>
@@ -64,10 +64,12 @@
     <div class="pipeline-bar" id="stage-counts" aria-live="polite"></div>
 
     <!-- A. Playbook -->
-    <section>
-      <details id="playbook" open>
-        <summary><h2>A. Sourcing playbook</h2> <span class="muted" id="playbook-progress"></span></summary>
-        <p class="hint">Check steps off as you go — progress is saved in this browser.</p>
+    <section class="xcard" id="playbook" data-card="playbook">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Sourcing playbook</h2><p class="xcard-sub">Check steps off as you go — progress is saved in this browser.</p></div>
+        <span class="xcard-aside" id="playbook-progress"></span>
+      </div>
+      <div class="xcard-body">
         <ol class="playbook">
           <li>
             <label><input type="checkbox" data-step="pa-open-data"> <strong>Pull PA registrations</strong> (Allentown, Lancaster, Philadelphia)</label>
@@ -106,12 +108,15 @@
             <p>Use the draft generator on each lead. Every email carries a clear opt-out line.</p>
           </li>
         </ol>
-      </details>
+      </div>
     </section>
 
-    <!-- B. Import -->
-    <section>
-      <h2>B. Import leads</h2>
+    <!-- Import -->
+    <section class="xcard" data-card="lead-import">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Import leads</h2><p class="xcard-sub">CSV, Excel or PDF — you review the columns before anything is imported.</p></div>
+      </div>
+      <div class="xcard-body">
       <p class="hint">CSV, Excel (.xlsx / .xls) or PDF from any of the sources above, or a re-import of an enriched export. You'll review the rows and confirm which column is which before anything is imported. Column names are recognized automatically when present (company / business name, address, city, county, state, zip, industry, employees, website, email, phone, contact name/title, email status, source); PDFs can be ruled tables, aligned columns, or directory listings. See <a href="prospects_template.csv" download>prospects_template.csv</a>.</p>
       <form id="lead-import-form">
         <input type="file" id="lead-file" accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
@@ -148,11 +153,16 @@
       </div>
       <div id="import-report" class="notice" hidden aria-live="polite"></div>
       <p id="import-error" class="status err" aria-live="assertive"></p>
+      </div>
     </section>
 
-    <!-- C. Pipeline -->
-    <section>
-      <h2>C. Lead pipeline</h2>
+    <!-- Pipeline -->
+    <section class="xcard" data-card="lead-pipeline">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Lead pipeline</h2><p class="xcard-sub">Select a lead to open it.</p></div>
+        <span class="xcard-aside" id="lead-count"></span>
+      </div>
+      <div class="xcard-body">
       <div class="filters">
         <input type="search" id="f-search" placeholder="Search company, city, contact…" aria-label="Search leads">
         <select id="f-region" aria-label="Filter by region"><option value="">All regions</option></select>
@@ -171,7 +181,7 @@
         </select>
       </div>
       <div class="toolbar">
-        <span id="lead-count" class="muted"></span>
+        <span class="muted"></span>
         <button type="button" class="btn small" id="add-lead">+ Add lead</button>
         <button type="button" class="btn small" id="export-filtered">Export shown (CSV)</button>
         <button type="button" class="btn small danger" id="delete-filtered">Delete shown</button>
@@ -185,6 +195,7 @@
         </table>
       </div>
       <p id="empty-leads" class="hint">No leads yet — import a CSV or add one manually.</p>
+      </div>
     </section>
 
     <!-- D. Lead detail -->
@@ -239,16 +250,23 @@
       <p id="d-warning" class="notice" hidden></p>
       <p id="d-status" class="status ok" aria-live="polite"></p>
 
-      <h3>Outreach draft</h3>
-      <p class="hint">Personalized to the lead's local footprint and product interest. Always keep the opt-out line.</p>
-      <textarea id="d-draft" rows="11" readonly></textarea>
-      <button type="button" class="btn small" id="d-copy">Copy draft</button>
+      <div class="xcard" data-card="lead-outreach">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Outreach draft</h3><p class="xcard-sub">Personalized to the lead's local footprint and product interest. Always keep the opt-out line.</p></div>
+        </div>
+        <div class="xcard-body">
+          <textarea id="d-draft" rows="11" readonly></textarea>
+          <button type="button" class="btn small" id="d-copy">Copy draft</button>
+        </div>
+      </div>
     </section>
 
-    <!-- E. Reference -->
-    <section>
-      <details>
-        <summary><h2>E. Targeting reference</h2></summary>
+    <!-- Reference -->
+    <section class="xcard" data-card="targeting-reference" data-open="false">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Targeting reference</h2><p class="xcard-sub">Priority industries, who to contact for each product line, and compliance.</p></div>
+      </div>
+      <div class="xcard-body">
         <h3>Priority industries</h3>
         <ul>
           <li><strong>Healthcare networks &amp; medical groups</strong> — scrubs/uniforms, heavy janitorial, admin furniture (e.g. Penn Medicine, Lehigh Valley Health Network, Penn State Health).</li>
@@ -270,7 +288,7 @@
           <li>Verify every address before sending to protect domain health.</li>
           <li>Respect <code>robots.txt</code> and site Terms; prefer government open data and licensed enrichment over scraping company sites.</li>
         </ul>
-      </details>
+      </div>
     </section>
   </div>
 
@@ -279,21 +297,26 @@
     <h2 class="panel-title">Good / Better / Best Comparison</h2>
 
     <!-- Step 1: catalog -->
-    <section>
-      <h2>1. Upload your Office Basics SKU/cost export</h2>
-      <p class="hint">Columns required: sku, name, description, category, tier (good/better/best), price</p>
+    <section class="xcard" data-card="compare-catalog">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>1. Load your good / better / best catalog</h2><p class="xcard-sub">Columns required: sku, name, description, category, tier (good/better/best), price</p></div>
+      </div>
+      <div class="xcard-body">
       <form id="catalog-form">
         <input type="file" id="catalog-file" accept=".xlsx,.xls,.csv" required>
         <button type="submit" class="btn blue">Load Catalog</button>
       </form>
       <p id="catalog-status" class="status ok" aria-live="polite"></p>
       <p id="catalog-error" class="status err" aria-live="assertive"></p>
+      </div>
     </section>
 
     <!-- Step 2: competitor product -->
-    <section>
-      <h2>2. Upload the current (competitor) product</h2>
-      <p class="hint">Photo, PDF, or Excel — price and product info are extracted automatically</p>
+    <section class="xcard" data-card="compare-product">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>2. Upload the current (competitor) product</h2><p class="xcard-sub">Photo, PDF, or Excel — price and product info are extracted automatically</p></div>
+      </div>
+      <div class="xcard-body">
       <form id="compare-form">
         <input type="file" id="compare-file" accept=".png,.jpg,.jpeg,.webp,.pdf,.xlsx,.xls" required>
         <input type="number" id="competitor-uses" min="0" step="any"
@@ -333,11 +356,15 @@
         </form>
         <p id="confirm-status" class="status" aria-live="polite"></p>
       </div>
+      </div>
     </section>
 
     <!-- Step 3: spend analysis -->
-    <section>
-      <h2>3. Usage analysis &amp; executive summary (optional)</h2>
+    <section class="xcard" data-card="compare-spend" data-open="false">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>3. Usage analysis &amp; executive summary</h2><p class="xcard-sub">Optional — see what months of spend would have cost with your equivalents.</p></div>
+      </div>
+      <div class="xcard-body">
       <p class="hint">Upload historical spend data (date, location, product, quantity, unit_price or total_price) to see how much Office Basics equivalents would have saved.</p>
       <form id="spend-form">
         <input type="file" id="spend-file" accept=".csv,.xlsx,.xls" required>
@@ -364,140 +391,250 @@
         <a id="spend-workbook-link" class="btn blue" href="#">Download Usage Analysis Workbook (.xlsx)</a>
         <a id="spend-summary-link" class="btn blue" href="#">Download Executive Summary (.docx)</a>
       </div>
+      </div>
     </section>
   </div>
 
   <!-- ===================== PROPOSALS & QUOTES TAB ===================== -->
   <div id="tab-quotes" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-quotes" hidden>
     <h2 class="panel-title">Proposals &amp; Quotes</h2>
-    <p class="hint">Build a quote for a qualified lead or an existing account, pull good/better/best lines straight from the Cost Comparison tab, show the customer their savings, print a proposal, and track it to won or lost. Winning a quote creates the account.</p>
+    <p class="hint">Build a proposal one line item at a time — pick a category, choose the item, and price it by margin or sell price. Winning a quote creates the account.</p>
     <div class="kpis" id="q-kpis" aria-live="polite"></div>
 
-    <div id="margin-card-home">
-    <div class="card margin-card" id="margin-card">
-      <h3>Margin calculator</h3>
-      <form id="margin-form" class="margin-grid" novalidate>
-        <label>Target margin (%)
-          <input type="number" id="m-target" min="0" max="99.9" step="0.1" inputmode="decimal">
-          <small class="muted">Saved for next time</small>
-        </label>
-        <label>Cost ($)
-          <input type="number" id="m-cost" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
-        <label>Sell price ($)
-          <input type="number" id="m-sell" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-          <small class="muted" id="m-sell-hint">Fills in from cost and target</small>
-        </label>
-        <label>Quantity
-          <input type="number" id="m-qty" min="0" step="1" value="1" inputmode="numeric">
-        </label>
-      </form>
-      <div class="margin-results" aria-live="polite">
-        <div><span class="muted">Margin</span><strong id="m-margin">—</strong></div>
-        <div><span class="muted">Profit / unit</span><strong id="m-profit">—</strong></div>
-        <div><span class="muted">Total profit</span><strong id="m-total">—</strong></div>
-        <div><span class="muted">Markup</span><strong id="m-markup">—</strong></div>
+    <section class="xcard" data-card="quotes-list">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Quotes</h2><p class="xcard-sub">Open one to keep building it, or start a new proposal.</p></div>
+        <span class="xcard-aside" id="q-count"></span>
       </div>
-      <p id="m-vs-target" class="hint"></p>
-      <button type="button" class="btn small" id="m-to-quote" hidden>Add as a line on the open quote</button>
-      <p class="hint">Margin = (sell − cost) ÷ sell. Markup = (sell − cost) ÷ cost. Sell price at target = cost ÷ (1 − target margin).</p>
-    </div>
-    </div>
-
-    <section>
-      <div class="filters">
-        <input type="search" id="q-f-search" placeholder="Search quote #, company, contact…" aria-label="Search quotes">
-        <select id="q-f-status" aria-label="Filter by status">
-          <option value="">All statuses</option>
-        </select>
+      <div class="xcard-body">
+        <div class="filters">
+          <input type="search" id="q-f-search" placeholder="Search quote #, company, contact…" aria-label="Search quotes">
+          <select id="q-f-status" aria-label="Filter by status">
+            <option value="">All statuses</option>
+          </select>
+        </div>
+        <div class="toolbar">
+          <span class="muted"></span>
+          <button type="button" class="btn small primary" id="q-new">+ New proposal</button>
+          <button type="button" class="btn small" id="q-export">Export shown (CSV)</button>
+        </div>
+        <div class="table-wrap">
+          <table class="leads">
+            <thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th class="num">Lines</th><th class="num">Order total</th><th class="num">First-year value</th><th class="num">Est. annual savings</th><th class="num" title="Internal — not shown on proposals">Margin 🔒</th><th>Valid until</th></tr></thead>
+            <tbody id="q-rows"></tbody>
+          </table>
+        </div>
+        <p id="q-empty" class="hint">No quotes yet. Start one here, from a lead (“New quote”), or from a cost comparison (“Add to quote”).</p>
       </div>
-      <div class="toolbar">
-        <span id="q-count" class="muted"></span>
-        <button type="button" class="btn small" id="q-new">+ New quote</button>
-        <button type="button" class="btn small" id="q-export">Export shown (CSV)</button>
-      </div>
-      <div class="table-wrap">
-        <table class="leads">
-          <thead><tr><th>Quote</th><th>Customer</th><th>Status</th><th class="num">Lines</th><th class="num">Order total</th><th class="num">First-year value</th><th class="num">Est. annual savings</th><th class="num" title="Internal — not shown on proposals">Margin 🔒</th><th>Valid until</th></tr></thead>
-          <tbody id="q-rows"></tbody>
-        </table>
-      </div>
-      <p id="q-empty" class="hint">No quotes yet. Start one here, from a lead's detail panel (“New quote”), or from a cost comparison result (“Add to quote”).</p>
     </section>
 
-    <section id="quote-editor" hidden>
-      <h2>Quote <span id="qe-number"></span> — <span id="qe-company"></span> <span id="qe-badge"></span></h2>
-      <p class="hint" id="qe-meta"></p>
-      <form id="quote-form" class="grid-form">
-        <label class="span-2">Customer <select name="customer"></select></label>
-        <label>Company name on proposal <input type="text" name="company"></label>
-        <label>Contact name <input type="text" name="contactName"></label>
-        <label>Contact title <input type="text" name="contactTitle"></label>
-        <label>Contact email <input type="email" name="email"></label>
-        <label>Valid for (days) <input type="number" name="validDays" min="1" step="1"></label>
-        <label>Payment terms <input type="text" name="terms" list="terms-options"></label>
-        <label>Delivery / installation ($) <input type="number" name="delivery" min="0" step="0.01"></label>
-        <label>Discount (%) <input type="number" name="discountPct" min="0" max="100" step="0.1"></label>
-        <label>Sales tax rate (%) <input type="number" name="taxRate" min="0" step="0.001"></label>
-        <label class="check"><input type="checkbox" name="taxExempt"> Customer is tax-exempt (certificate on file)</label>
-        <label>Status <select name="status"></select></label>
-        <label id="qe-loss-wrap" hidden>Loss reason <select name="lossReason"></select></label>
-        <p class="hint span-2">Tax rate defaults from the customer's location (Philadelphia 8%, rest of PA 6%, NJ 6.625%) and apparel lines default to non-taxable. Confirm rates and exemptions for each deal.</p>
-
-        <div class="span-2">
-          <h3>Line items</h3>
-          <div id="qe-from-comparison" class="notice" hidden>
-            <p>From your last cost comparison (<strong id="qe-comp-product"></strong>) — add a tier as a line; the competitor's price fills “current price” (normalized to cost-per-use when uses-per-case is known):</p>
-            <div class="row-buttons">
-              <button type="button" class="btn small" id="qe-add-good"></button>
-              <button type="button" class="btn small" id="qe-add-better"></button>
-              <button type="button" class="btn small" id="qe-add-best"></button>
-            </div>
+    <section class="xcard" data-card="item-catalog">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Item catalog</h2><p class="xcard-sub">What you can sell and what it costs you. Line items pull their cost from here.</p></div>
+        <span class="xcard-aside" id="cat-summary"></span>
+      </div>
+      <div class="xcard-body">
+        <div class="count-chips" id="cat-counts"></div>
+        <p id="cat-empty" class="hint">Import your cost file (CSV or Excel) with at least an item name/description and a cost column. SKU, category, list price, unit and pack are used when present; each item is filed under Janitorial Supplies, Breakroom Supplies, Office Supplies, Printing Solutions, Print and Promotional, or Furniture from its category or name. See <a href="catalog_items_template.csv" download>catalog_items_template.csv</a>.</p>
+        <form id="cat-form" class="cat-form">
+          <input type="file" id="cat-file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
+          <label class="check"><input type="checkbox" id="cat-replace"> Replace the whole catalog (otherwise items merge by SKU and costs update)</label>
+          <div class="row-buttons">
+            <button type="submit" class="btn small primary">Import items</button>
+            <button type="button" class="btn small" id="cat-sample">Load sample items</button>
+            <button type="button" class="btn small danger" id="cat-clear" hidden>Clear catalog</button>
           </div>
-          <div class="table-wrap">
-            <table class="lines">
-              <thead><tr><th>SKU</th><th>Description</th><th>Line</th><th>Tier</th><th>Qty</th><th>UOM</th><th>Frequency</th><th>Unit price</th><th class="internal" title="Internal — not shown on proposals">Cost 🔒</th><th>Current price</th><th>Tax</th><th class="num">Extended</th><th class="num internal" title="Internal — not shown on proposals">Margin 🔒</th><th></th></tr></thead>
-              <tbody id="qe-lines"></tbody>
-            </table>
-          </div>
-          <p id="qe-no-lines" class="hint">No lines yet.</p>
-          <button type="button" class="btn small" id="qe-add-line">+ Add line</button>
-          <p class="hint">“Current price” is what the customer pays today for the equivalent item (per unit) — it drives the savings figure. Frequency annualizes recurring lines (e.g. monthly janitorial restock) separately from one-time lines (e.g. a furniture install).</p>
-        </div>
-
-        <div class="span-2" id="qe-calc-slot"></div>
-        <div class="span-2 totals" id="qe-totals" aria-live="polite"></div>
-
-        <label class="span-2">Scope / notes (printed on the proposal) <textarea name="notes" rows="3"></textarea></label>
-
-        <div class="span-2 row-buttons">
-          <button type="submit" class="btn green">Save</button>
-          <button type="button" class="btn blue" id="qe-print">Print / Save PDF</button>
-          <button type="button" class="btn small" id="qe-mark-sent">Mark sent</button>
-          <button type="button" class="btn small" id="qe-mark-won">Mark won</button>
-          <button type="button" class="btn small" id="qe-mark-lost">Mark lost</button>
-          <button type="button" class="btn small" id="qe-duplicate">Duplicate</button>
-          <button type="button" class="btn small" id="qe-open-customer">Open customer</button>
-          <button type="button" class="btn small danger" id="qe-delete">Delete</button>
-          <button type="button" class="btn small" id="qe-close">Close</button>
-        </div>
-      </form>
-      <p id="qe-status" class="status ok" aria-live="polite"></p>
-      <datalist id="terms-options">
-        <option value="Net 30"><option value="Net 45"><option value="Net 60"><option value="Due on receipt"><option value="50% deposit, balance on install">
-      </datalist>
+        </form>
+        <p id="cat-sample-note" class="hint warn" hidden>Sample items (SKUs starting “SAMPLE-”) have made-up costs — replace them with your real cost file before quoting.</p>
+        <p id="cat-report" class="notice" hidden aria-live="polite"></p>
+      </div>
     </section>
 
-    <section>
-      <details>
-        <summary><h2>Your details for proposals</h2></summary>
+    <section class="xcard margin-card" id="margin-card" data-card="margin-calculator">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Margin calculator</h2><p class="xcard-sub">Your target margin is saved and used as the default on new proposals.</p></div>
+      </div>
+      <div class="xcard-body">
+        <form id="margin-form" class="margin-grid" novalidate>
+          <label>Target margin (%)
+            <input type="number" id="m-target" min="0" max="99.9" step="0.1" inputmode="decimal">
+            <small class="muted">Saved for next time</small>
+          </label>
+          <label>Cost ($)
+            <input type="number" id="m-cost" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+          </label>
+          <label>Sell price ($)
+            <input type="number" id="m-sell" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+            <small class="muted" id="m-sell-hint">Fills in from cost and target</small>
+          </label>
+          <label>Quantity
+            <input type="number" id="m-qty" min="0" step="1" value="1" inputmode="numeric">
+          </label>
+        </form>
+        <div class="margin-results" aria-live="polite">
+          <div><span class="muted">Margin</span><strong id="m-margin">—</strong></div>
+          <div><span class="muted">Profit / unit</span><strong id="m-profit">—</strong></div>
+          <div><span class="muted">Total profit</span><strong id="m-total">—</strong></div>
+          <div><span class="muted">Markup</span><strong id="m-markup">—</strong></div>
+        </div>
+        <p id="m-vs-target" class="hint"></p>
+        <p class="hint">Margin = (sell − cost) ÷ sell. Markup = (sell − cost) ÷ cost. Sell price at target = cost ÷ (1 − target margin).</p>
+      </div>
+    </section>
+
+    <section class="xcard" data-card="rep-profile" data-open="false">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Your details for proposals</h2><p class="xcard-sub">Printed on every proposal.</p></div>
+      </div>
+      <div class="xcard-body">
         <form id="rep-profile" class="grid-form">
           <label>Your name <input type="text" name="repName"></label>
           <label>Email <input type="email" name="repEmail"></label>
           <label>Phone <input type="text" name="repPhone"></label>
           <label>Office Basics mailing address <input type="text" name="repAddress"></label>
         </form>
-      </details>
+      </div>
+    </section>
+
+    <section id="quote-editor" hidden>
+      <h2>Quote <span id="qe-number"></span> — <span id="qe-company"></span> <span id="qe-badge"></span></h2>
+      <p class="hint" id="qe-meta"></p>
+
+      <div class="xcard" data-card="qe-customer">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Customer &amp; terms</h3></div>
+          <span class="xcard-aside" id="qe-customer-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <form id="quote-form" class="grid-form">
+            <label class="span-2">Customer <select name="customer"></select></label>
+            <label>Company name on proposal <input type="text" name="company"></label>
+            <label>Contact name <input type="text" name="contactName"></label>
+            <label>Contact title <input type="text" name="contactTitle"></label>
+            <label>Contact email <input type="email" name="email"></label>
+            <label>Valid for (days) <input type="number" name="validDays" min="1" step="1"></label>
+            <label>Payment terms <input type="text" name="terms" list="terms-options"></label>
+            <label>Delivery / installation ($) <input type="number" name="delivery" min="0" step="0.01"></label>
+            <label>Discount (%) <input type="number" name="discountPct" min="0" max="100" step="0.1"></label>
+            <label>Sales tax rate (%) <input type="number" name="taxRate" min="0" step="0.001"></label>
+            <label class="check"><input type="checkbox" name="taxExempt"> Customer is tax-exempt (certificate on file)</label>
+            <label>Status <select name="status"></select></label>
+            <label id="qe-loss-wrap" hidden>Loss reason <select name="lossReason"></select></label>
+            <p class="hint span-2">Tax rate defaults from the customer's location (Philadelphia 8%, rest of PA 6%, NJ 6.625%). Confirm rates and exemptions for each deal — clothing is generally exempt in PA and NJ.</p>
+            <label class="span-2">Scope / notes (printed on the proposal) <textarea name="notes" rows="3"></textarea></label>
+          </form>
+        </div>
+      </div>
+
+      <div class="xcard lineup-card" data-card="qe-lineup">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Contract line items</h3><p class="xcard-sub">Select a line item to choose and price it. Cost and margin stay internal.</p></div>
+          <span class="xcard-aside" id="qe-lines-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <div class="default-margin">
+            <label for="qe-default-margin">Margin for every item</label>
+            <span class="input-suffix"><input type="number" id="qe-default-margin" min="0" max="99.9" step="0.5" inputmode="decimal"><span>%</span></span>
+            <button type="button" class="btn small" id="qe-apply-margin">Apply to all line items</button>
+            <small class="muted">New items start at this margin. Starts at your saved target.</small>
+          </div>
+          <div id="qe-from-comparison" class="notice" hidden>
+            <p>From your last cost comparison (<strong id="qe-comp-product"></strong>) — add a tier as a line item; the competitor's price fills “current price”:</p>
+            <div class="row-buttons">
+              <button type="button" class="btn small" id="qe-add-good"></button>
+              <button type="button" class="btn small" id="qe-add-better"></button>
+              <button type="button" class="btn small" id="qe-add-best"></button>
+            </div>
+          </div>
+          <ol class="lineup" id="qe-lineup"></ol>
+          <div class="lineup-totals" id="qe-lineup-totals"></div>
+        </div>
+      </div>
+
+      <div class="totals" id="qe-totals" aria-live="polite"></div>
+
+      <div class="row-buttons qe-actions">
+        <button type="button" class="btn green" id="qe-save">Save</button>
+        <button type="button" class="btn blue" id="qe-print">Print / Save PDF</button>
+        <button type="button" class="btn small" id="qe-mark-sent">Mark sent</button>
+        <button type="button" class="btn small" id="qe-mark-won">Mark won</button>
+        <button type="button" class="btn small" id="qe-mark-lost">Mark lost</button>
+        <button type="button" class="btn small" id="qe-duplicate">Duplicate</button>
+        <button type="button" class="btn small" id="qe-open-customer">Open customer</button>
+        <button type="button" class="btn small danger" id="qe-delete">Delete</button>
+        <button type="button" class="btn small" id="qe-close">Close</button>
+      </div>
+      <p id="qe-status" class="status ok" aria-live="polite"></p>
+      <datalist id="terms-options">
+        <option value="Net 30"><option value="Net 45"><option value="Net 60"><option value="Due on receipt"><option value="50% deposit, balance on install">
+      </datalist>
+
+      <!-- Item picker: opens over the quote like DFS Riches' "Draft QB" screen -->
+      <div id="item-picker" class="picker" role="dialog" aria-modal="true" aria-labelledby="ip-title" hidden>
+        <div class="picker-header">
+          <button type="button" class="link-btn picker-back" id="ip-back">‹ Proposal</button>
+          <div class="picker-heading"><strong id="ip-title" class="picker-title"></strong><small class="muted" id="ip-step"></small></div>
+          <button type="button" class="link-btn danger-text picker-remove" id="ip-remove" hidden>Remove</button>
+        </div>
+
+        <div id="ip-choose" class="picker-body">
+          <div class="ip-browse">
+            <div class="ip-cat-col">
+              <div class="ip-col-head"><strong>Categories</strong> <button type="button" class="link-btn" id="ip-cats-clear" hidden>All</button></div>
+              <div class="ip-cats" id="ip-cats" role="group" aria-label="Major categories — choose one or more"></div>
+              <p class="hint">Pick one or more. None picked shows every category.</p>
+            </div>
+            <div class="ip-search-col">
+              <input type="search" id="ip-search" placeholder="Search items, SKU, description…" aria-label="Search items">
+              <p class="hint" id="ip-count"></p>
+              <div id="ip-empty" class="notice" hidden>
+                <p>Your item catalog is empty. Import your cost file in the <strong>Item catalog</strong> card on the Proposals tab, or try the builder with sample items.</p>
+                <button type="button" class="btn small" id="ip-load-sample">Load sample items</button>
+              </div>
+              <ul class="ip-results" id="ip-results"></ul>
+              <button type="button" class="link-btn" id="ip-custom">+ Add an item that isn't in the catalog</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="ip-price" class="picker-body" hidden>
+          <div class="ip-item-head">
+            <span class="stage" id="ip-cat-label"></span>
+            <span class="muted" id="ip-from-catalog">Cost pulled from your catalog</span>
+            <button type="button" class="link-btn" id="ip-change">‹ Change item</button>
+          </div>
+          <div class="ip-grid">
+            <label class="span-2">Item <input type="text" id="ip-name"></label>
+            <label>SKU <input type="text" id="ip-sku"></label>
+            <label>Unit <input type="text" id="ip-uom"></label>
+            <label class="internal">Cost 🔒 <input type="number" id="ip-cost" min="0" step="0.01" inputmode="decimal"></label>
+            <label class="ip-key">Margin % <input type="number" id="ip-margin" min="0" max="99.9" step="0.1" inputmode="decimal"></label>
+            <label class="ip-key">Sell price <input type="number" id="ip-sell" min="0" step="0.01" inputmode="decimal"></label>
+            <label>Quantity <input type="number" id="ip-qty" min="0" step="any" inputmode="decimal"></label>
+            <label>Frequency <select id="ip-freq"></select></label>
+            <label>Customer pays today (per unit) <input type="number" id="ip-current" min="0" step="0.01" placeholder="optional"></label>
+            <label class="check"><input type="checkbox" id="ip-taxable"> Taxable</label>
+          </div>
+          <div class="margin-results">
+            <div><span class="muted">Profit / unit</span><strong id="ip-profit">—</strong></div>
+            <div><span class="muted">Extended</span><strong id="ip-ext">—</strong></div>
+            <div><span class="muted">Gross profit</span><strong id="ip-gp">—</strong></div>
+            <div><span class="muted">Markup</span><strong id="ip-markup">—</strong></div>
+          </div>
+          <p class="hint" id="ip-vs-target"></p>
+          <p class="status err" id="ip-error" aria-live="assertive"></p>
+          <div class="row-buttons">
+            <button type="button" class="btn green" id="ip-save">Save line item</button>
+            <button type="button" class="btn blue" id="ip-save-next">Save &amp; next line item →</button>
+          </div>
+        </div>
+
+        <div class="picker-bar">
+          <div><span class="picker-bar-label">Line items</span> <span class="picker-bar-value" id="ip-bar-lines">0</span></div>
+          <div><span class="picker-bar-label">Subtotal</span> <span class="picker-bar-value" id="ip-bar-subtotal">$0.00</span></div>
+          <div><span class="picker-bar-label">Margin 🔒</span> <span class="picker-bar-value" id="ip-bar-margin">—</span> <small class="muted" id="ip-bar-target"></small></div>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -512,7 +649,12 @@
       <ul id="a-followups" class="plain"></ul>
     </div>
 
-    <section>
+    <section class="xcard" data-card="accounts-list">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Accounts</h2><p class="xcard-sub">Select an account to open it.</p></div>
+        <span class="xcard-aside" id="a-count"></span>
+      </div>
+      <div class="xcard-body">
       <div class="filters">
         <input type="search" id="a-f-search" placeholder="Search company, city, contact, owner…" aria-label="Search accounts">
         <select id="a-f-status" aria-label="Filter accounts">
@@ -528,7 +670,7 @@
         </select>
       </div>
       <div class="toolbar">
-        <span id="a-count" class="muted"></span>
+        <span class="muted"></span>
         <button type="button" class="btn small" id="a-new">+ Add account</button>
         <button type="button" class="btn small" id="a-export">Export shown (CSV)</button>
       </div>
@@ -539,15 +681,39 @@
         </table>
       </div>
       <p id="a-empty" class="hint">No accounts yet — mark a quote won, or add one manually.</p>
+      </div>
     </section>
 
     <section id="account-detail" hidden>
       <h2>Account — <span id="ad-title"></span></h2>
       <div class="kpis small" id="ad-kpis"></div>
 
-      <h3>Product-line coverage</h3>
-      <div id="ad-coverage" class="coverage-grid"></div>
+      <div class="xcard onboarding-card" id="ad-onboarding-card" data-card="account-onboarding">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Customer Onboarding</h3><p class="xcard-sub">Get the new customer set up and ordering. Finishing every step makes the account Active.</p></div>
+          <span class="xcard-aside" id="ad-onboarding-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <div class="progress" aria-hidden="true"><div class="progress-fill" id="ad-onboarding-bar"></div></div>
+          <ul class="checklist" id="ad-onboarding"></ul>
+          <p class="hint" id="ad-onboarding-done" hidden>Onboarding complete — the account is Active. Next up: a first business review in 90 days.</p>
+        </div>
+      </div>
 
+      <div class="xcard" data-card="account-coverage">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Product-line coverage</h3><p class="xcard-sub">What they buy today, and who to talk to about the rest.</p></div>
+        </div>
+        <div class="xcard-body">
+          <div id="ad-coverage" class="coverage-grid"></div>
+        </div>
+      </div>
+
+      <div class="xcard" data-card="account-details">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Account details</h3></div>
+        </div>
+        <div class="xcard-body">
       <form id="account-form" class="grid-form">
         <label>Company <input type="text" name="company" required></label>
         <label>Status <select name="status"></select></label>
@@ -577,12 +743,26 @@
         </div>
       </form>
       <p id="ad-status" class="status ok" aria-live="polite"></p>
+        </div>
+      </div>
 
-      <h3>Quotes</h3>
-      <ul id="ad-quotes" class="plain"></ul>
-      <p id="ad-no-quotes" class="hint">No quotes linked to this account.</p>
+      <div class="xcard" data-card="account-quotes">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Quotes</h3></div>
+          <span class="xcard-aside" id="ad-quotes-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <ul id="ad-quotes" class="plain"></ul>
+          <p id="ad-no-quotes" class="hint">No quotes linked to this account.</p>
+        </div>
+      </div>
 
-      <h3>Activity</h3>
+      <div class="xcard" data-card="account-activity">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Activity</h3><p class="xcard-sub">Log every touch; set the next action as you go.</p></div>
+          <span class="xcard-aside" id="ad-activity-aside"></span>
+        </div>
+        <div class="xcard-body">
       <form id="act-form" class="grid-form">
         <label>Type <select id="act-type"></select></label>
         <label>Date <input type="date" id="act-date"></label>
@@ -593,6 +773,8 @@
       </form>
       <ul id="ad-activity" class="timeline"></ul>
       <p id="ad-no-activity" class="hint">No activity logged yet.</p>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -617,10 +799,12 @@
 
   <script src="config.js"></script>
   <script src="store.js"></script>
+  <script src="cards.js"></script>
   <script src="auth.js"></script>
   <script src="tabs.js"></script>
   <script src="app.js"></script>
   <script src="prospecting.js"></script>
+  <script src="catalog.js"></script>
   <script src="quotes.js"></script>
   <script src="accounts.js"></script>
   <script src="deal.js"></script>

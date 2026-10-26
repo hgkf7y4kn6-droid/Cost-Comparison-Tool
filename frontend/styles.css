@@ -389,10 +389,6 @@ body.drawer-open { overflow: hidden; }
 
 /* ---------- Today ---------- */
 .today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 0.8em; }
-.today-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.7em 0.9em; background: #fff; }
-.today-card h3 { margin: 0 0 0.1em; display: flex; align-items: center; gap: 0.4em; }
-.today-card .count { background: #edf2f7; border-radius: 999px; padding: 0 0.55em; font-size: 0.8em; color: #4a5568; }
-.today-card > .hint { margin-bottom: 0.4em; }
 .today-empty { color: var(--muted); font-size: 0.9em; margin: 0.4em 0; }
 .today-list { list-style: none; margin: 0; padding: 0; }
 .today-list li {
@@ -417,4 +413,172 @@ body.drawer-open { overflow: hidden; }
   .deal-tools { flex: 1; }
   .deal-tools select { flex: 1; max-width: none; }
   #deal-hint { flex-basis: 100%; }
+}
+
+/* ---------- Expandable cards (DFS Riches ExpandableCard) ---------- */
+section.xcard, .xcard {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 0.9em 1em;
+  margin: 0.9em 0;
+}
+.xcard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8em;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 8px;
+}
+.xcard-head:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+.xcard-titles { flex: 1; min-width: 0; }
+.xcard-titles h2, .xcard-titles h3 { margin: 0; font-size: 1.05em; }
+.xcard-sub { margin: 0.15em 0 0; font-size: 0.78em; color: var(--muted); }
+.xcard-aside { font-size: 0.8em; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.xcard-aside.count { background: #edf2f7; border-radius: 999px; padding: 0.05em 0.6em; }
+.xcard-aside.count.has { background: #bee3f8; color: #2a4365; }
+.xcard-chev {
+  flex-shrink: 0;
+  width: 0.55em;
+  height: 0.55em;
+  border-right: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
+  transform: rotate(-135deg);
+  margin: 0.25em 0.3em 0 0;
+  transition: transform 0.15s ease;
+}
+.xcard.collapsed .xcard-chev { transform: rotate(45deg); margin-top: -0.25em; }
+.xcard-body { margin-top: 0.8em; }
+.xcard.collapsed > .xcard-body { display: none; }
+.xcard-preview { margin-top: 0.6em; }
+.xcard:not(.collapsed) > .xcard-preview { display: none; }
+.xcard .xcard { margin: 0.6em 0; background: #fcfcfd; }
+section.drawer .xcard { margin: 0.7em 0; }
+/* Today cards: the grid already spaces them. */
+.today-grid .xcard { margin: 0; }
+.today-card .xcard-body { margin-top: 0.5em; }
+
+/* ---------- Contract line items (lineup) ---------- */
+.default-margin { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em 0.7em; font-size: 0.85em; margin-bottom: 0.6em; }
+.default-margin label { font-weight: 600; }
+.default-margin small { flex-basis: 100%; }
+.input-suffix { display: inline-flex; align-items: center; gap: 0.2em; }
+.input-suffix input { width: 5.5em; }
+ol.lineup { list-style: none; margin: 0.4em 0 0; padding: 0; border-top: 1px solid var(--border); }
+.lineup-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
+.lineup-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  min-width: 0;
+  border: 0;
+  background: none;
+  padding: 0.65em 0.3em;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.lineup-main:hover { background: #f7fafc; }
+.lineup-slot { width: 2.4em; flex-shrink: 0; font-size: 0.8em; font-weight: 700; color: #c05621; }
+.lineup-player { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lineup-name { font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lineup-meta { font-size: 0.78em; color: var(--muted); }
+.lineup-numbers { display: flex; flex-direction: column; align-items: flex-end; text-align: right; max-width: 46%; }
+.lineup-price { font-size: 0.92em; white-space: nowrap; }
+.lineup-margin { font-size: 0.78em; color: var(--ok); font-weight: 600; }
+.lineup-margin.warn { color: #b7791f; }
+.lineup-open-select { font-weight: 700; color: #c05621; }
+.lineup-row.open .lineup-main { padding: 0.8em 0.3em; }
+.lineup-remove { border: 0; background: none; color: var(--muted); font-size: 1.2em; padding: 0 0.6em; cursor: pointer; }
+.lineup-remove:hover { color: var(--err); }
+.lineup-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5em; margin-top: 0.7em; }
+.lineup-total { display: flex; flex-direction: column; }
+.lineup-total-label { font-size: 0.75em; color: var(--muted); }
+.lineup-total-value { font-size: 0.95em; }
+.lineup-total-value.warn { color: #b7791f; }
+@media (max-width: 560px) { .lineup-totals { grid-template-columns: repeat(2, 1fr); } }
+.qe-actions { margin: 0.8em 0 0.3em; }
+#quote-editor > .totals { margin-top: 0.6em; }
+
+/* ---------- Item picker (DFS Riches "Draft QB" screen) ---------- */
+.picker {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(1180px, 100vw);
+  z-index: 70;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.18);
+}
+.picker[hidden] { display: none; }
+.picker-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5em; padding: 0.7em 1em; border-bottom: 1px solid var(--border); }
+.picker-back, .picker-remove { width: 7em; font-weight: 700; color: #c05621; text-align: left; }
+.picker-remove { text-align: right; color: var(--err); }
+.picker-heading { display: flex; flex-direction: column; align-items: center; }
+.picker-title { font-size: 1.05em; }
+.picker-body { flex: 1; overflow-y: auto; padding: 0.9em 1em 1.2em; overscroll-behavior: contain; }
+.picker-body[hidden] { display: none; }
+.picker-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3em 1em; padding: 0.7em 1em; border-top: 1px solid var(--border); background: #fff; font-size: 0.85em; }
+.picker-bar-label { color: var(--muted); }
+.picker-bar-value { font-weight: 700; }
+.picker-bar-value.warn { color: #b7791f; }
+
+.ip-browse { display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: 1em; align-items: start; }
+@media (max-width: 700px) { .ip-browse { grid-template-columns: 1fr; } }
+.ip-col-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.3em; font-size: 0.9em; }
+.ip-cats { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.ip-cat { display: flex; align-items: center; gap: 0.5em; padding: 0.55em 0.7em; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 0.9em; }
+.ip-cat:last-child { border-bottom: 0; }
+.ip-cat input { width: auto; }
+.ip-cat.on { background: #ebf8ff; font-weight: 600; }
+.ip-cat-name { flex: 1; }
+.ip-cat-count { font-size: 0.8em; color: var(--muted); }
+.ip-search-col input[type="search"] { margin-bottom: 0.2em; }
+ul.ip-results { list-style: none; margin: 0.3em 0 0.6em; padding: 0; border-top: 1px solid var(--border); }
+.ip-row { border-bottom: 1px solid var(--border); }
+.ip-item-btn { width: 100%; display: flex; align-items: center; gap: 0.7em; border: 0; background: none; padding: 0.6em 0.3em; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+.ip-item-btn:hover { background: #f7fafc; }
+.ip-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 0.92em; }
+.ip-item-cost { display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-size: 0.9em; }
+.ip-plus { flex-shrink: 0; width: 1.7em; height: 1.7em; border-radius: 999px; background: var(--blue); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+.ip-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6em; margin-bottom: 0.7em; font-size: 0.88em; }
+.ip-item-head .link-btn { margin-left: auto; }
+.ip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.6em; }
+.ip-grid label:not(.check) { display: flex; flex-direction: column; gap: 0.2em; font-size: 0.8em; color: #4a5568; }
+.ip-grid .span-2 { grid-column: 1 / -1; }
+.ip-grid label.ip-key input { border-color: var(--blue); font-weight: 700; font-size: 1.05em; }
+.ip-grid label.internal input { background: #faf5ff; border-color: #d6bcfa; }
+
+/* ---------- Item catalog ---------- */
+.count-chips { display: flex; flex-wrap: wrap; gap: 0.35em; margin-bottom: 0.6em; }
+.count-chip { background: #edf2f7; border-radius: 999px; padding: 0.15em 0.7em; font-size: 0.78em; }
+.cat-form { display: flex; flex-direction: column; gap: 0.5em; }
+
+/* ---------- Customer Onboarding ---------- */
+.onboarding-card { border-color: #9ae6b4; background: #f0fff4; }
+.progress { height: 6px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-bottom: 0.6em; }
+.progress-fill { height: 100%; background: var(--ok); width: 0; transition: width 0.2s ease; }
+ul.checklist { list-style: none; margin: 0; padding: 0; }
+ul.checklist li { padding: 0.3em 0; border-bottom: 1px solid #c6f6d5; }
+ul.checklist li:last-child { border-bottom: 0; }
+/* Keep the picker title centered when there's no Remove button. */
+.picker-remove[hidden] { display: inline-block; visibility: hidden; }
+/* Room for the panel's × so it never sits on top of a card header. */
+section.drawer { padding-right: 3.2em; }
+section.drawer .drawer-close { margin-right: -2.6em; }
+@media (max-width: 700px) {
+  /* Categories become wrapping chips so the search box stays in view. */
+  .ip-cats { flex-direction: row; flex-wrap: wrap; gap: 0.35em; border: 0; overflow: visible; }
+  .ip-cat { border: 1px solid var(--border); border-radius: 999px; padding: 0.3em 0.7em; }
+  .ip-cat:last-child { border-bottom: 1px solid var(--border); }
+  .ip-cat-col > .hint { display: none; }
+  section.drawer { padding-right: 1em; padding-top: 2.8em; }
+  section.drawer .drawer-close { position: absolute; top: 0.5em; right: 0.6em; margin: 0; }
 }

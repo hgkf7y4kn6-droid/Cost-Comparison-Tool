@@ -1096,6 +1096,8 @@
   // --- Shared with the other tabs ---------------------------------------------
 
   Object.assign(hub.ref, { REGIONS, SEGMENTS, PRODUCTS, STAGES, regionFor });
+  // CSV in the browser, Excel/PDF through the backend; used by the item catalog too.
+  hub.readTableFile = readLeadFile;
   hub.openLead = (id) => {
     window.showTab("prospecting");
     openLead(id);

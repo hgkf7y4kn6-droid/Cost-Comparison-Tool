@@ -32,6 +32,9 @@
   }
 
   function closeCurrent() {
+    // A picker open inside the panel (the quote's item picker) closes first.
+    const picker = current && $(current).querySelector(".picker:not([hidden])");
+    if (picker) return picker.querySelector(".picker-back").click();
     const open = DRAWERS.find(([id]) => id === current);
     if (open) $(open[1]).click();
   }
