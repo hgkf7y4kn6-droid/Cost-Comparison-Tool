@@ -16,6 +16,7 @@ import torch
 from docx import Document
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
@@ -27,7 +28,7 @@ from pydantic import BaseModel
 from transformers import CLIPModel, CLIPProcessor
 
 import auth
-from accounts_store import AccountStore
+from accounts_store import RecordStore
 from table_extract import extract_sheets
 
 try:
@@ -249,6 +250,17 @@ app = FastAPI(title="Office Basics Good/Better/Best Comparison Engine")
 
 # Every endpoint except these requires a signed-in user (see auth.py).
 PUBLIC_PATHS = {"/health", "/auth/login"}
+# The web app itself (frontend/) is served from "/" so the whole product runs
+# from this one service. Those static files are public; the data they show
+# comes from the protected API.
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+
+
+def _is_frontend_file(path: str) -> bool:
+    if path == "/":
+        return os.path.isdir(FRONTEND_DIR)
+    full = os.path.realpath(os.path.join(FRONTEND_DIR, path.lstrip("/")))
+    return full.startswith(os.path.realpath(FRONTEND_DIR) + os.sep) and os.path.isfile(full)
 authenticator = auth.from_environment()
 
 
@@ -257,6 +269,8 @@ authenticator = auth.from_environment()
 @app.middleware("http")
 async def require_sign_in(request: Request, call_next):
     if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+        return await call_next(request)
+    if request.method in ("GET", "HEAD") and _is_frontend_file(request.url.path):
         return await call_next(request)
     if not authenticator.configured:
         return JSONResponse(
@@ -282,6 +296,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/reports", StaticFiles(directory=REPORTS_DIR), name="reports")
+# Compress API responses and the web app's files (JS/CSS/JSON shrink ~70-80%).
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 engine = CLIPSearchEngine()
 feedback_store = FeedbackStore(engine)
 
@@ -483,44 +499,58 @@ async def who_am_i(request: Request):
 
 
 # ==========================================
-# 4c. SHARED ACCOUNTS (see accounts_store.py for who sees what)
+# 4c. SHARED RECORDS: accounts and leads (see accounts_store.py for who sees what)
 # ==========================================
-account_store = AccountStore(os.path.join(os.environ.get("DATA_DIR", tempfile.gettempdir()), "sales_hub.db"))
+record_store = RecordStore(os.path.join(os.environ.get("DATA_DIR", tempfile.gettempdir()), "sales_hub.db"))
 
 
-@app.get("/accounts/")
-async def list_accounts(request: Request):
-    email = request.state.user
-    role = authenticator.role(email)
-    full, limited = await run_in_threadpool(account_store.list_visible, email, role == "manager")
-    return {"accounts": full, "others": limited, "role": role}
-
-
-@app.put("/accounts/{account_id}")
-async def save_account(account_id: str, request: Request):
-    email = request.state.user
+def _record_call(fn, *args):
     try:
-        data = await request.json()
-    except ValueError:
-        raise HTTPException(400, "Body must be JSON.")
-    try:
-        return await run_in_threadpool(account_store.save, account_id, data, email, authenticator.role(email) == "manager")
+        return fn(*args)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
     except PermissionError as e:
         raise HTTPException(403, str(e)) from e
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
 
 
-@app.delete("/accounts/{account_id}")
-async def delete_account(account_id: str, request: Request):
+@app.get("/records/{kind}/")
+async def list_records(kind: str, request: Request):
+    email = request.state.user
+    role = authenticator.role(email)
+    full, limited = await run_in_threadpool(_record_call, record_store.list_visible, kind, email, role == "manager")
+    return {"records": full, "others": limited, "role": role}
+
+
+@app.post("/records/{kind}/bulk")
+async def save_records(kind: str, request: Request):
     email = request.state.user
     try:
-        found = await run_in_threadpool(account_store.delete, account_id, email, authenticator.role(email) == "manager")
-    except PermissionError as e:
-        raise HTTPException(403, str(e)) from e
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(400, "Body must be JSON.")
+    records = body.get("records") if isinstance(body, dict) else None
+    return await run_in_threadpool(_record_call, record_store.save_many, kind, records, email, authenticator.role(email) == "manager")
+
+
+@app.put("/records/{kind}/{record_id}")
+async def save_record(kind: str, record_id: str, request: Request):
+    email = request.state.user
+    try:
+        data = await request.json()
+    except ValueError:
+        raise HTTPException(400, "Body must be JSON.")
+    return await run_in_threadpool(_record_call, record_store.save, kind, record_id, data, email, authenticator.role(email) == "manager")
+
+
+@app.delete("/records/{kind}/{record_id}")
+async def delete_record(kind: str, record_id: str, request: Request):
+    email = request.state.user
+    found = await run_in_threadpool(_record_call, record_store.delete, kind, record_id, email, authenticator.role(email) == "manager")
     if not found:
-        raise HTTPException(404, "No such account.")
-    return {"deleted": account_id}
+        raise HTTPException(404, "No such record.")
+    return {"deleted": record_id}
 
 
 @app.get("/catalog/status/")
@@ -1190,3 +1220,8 @@ async def spend_analysis(
         "workbook_url": f"/reports/{xlsx_filename}",
         "executive_summary_url": f"/reports/{docx_filename}",
     }
+
+
+# The web app, last so every API route above takes precedence.
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

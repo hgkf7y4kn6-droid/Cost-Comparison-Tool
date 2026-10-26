@@ -11,15 +11,19 @@
   // checklist that, when finished, makes the account Active and schedules the
   // first business review.
   const ONBOARDING_ACTION = "Customer Onboarding";
+  // Certificates only apply to some customers: a tax-exempt certificate for
+  // non-profits, a resale certificate if they'll resell some of the supplies.
   const ONBOARDING_STEPS = [
     ["kickoff", "Kickoff meeting held with the decision-maker"],
     ["account", "Customer account set up (bill-to, ship-to, customer number)"],
     ["contacts", "Ordering, accounts-payable and delivery contacts confirmed"],
     ["pricing", "Contract pricing loaded from the won proposal"],
-    ["tax", "Tax-exempt certificate collected, or confirmed taxable"],
+    ["tax", "Tax-exempt certificate collected (non-profit)", (a) => a.nonProfit],
+    ["resale", "Resale certificate collected (reselling supplies)", (a) => a.resells],
     ["delivery", "Delivery locations and schedule confirmed"],
     ["first-order", "First order placed and delivered"],
   ];
+  const stepsFor = (acct) => ONBOARDING_STEPS.filter(([, , applies]) => !applies || applies(acct));
   // Accounts created before onboarding existed carried this next action.
   for (const a of window.SalesHub.state.accounts) {
     if (a.nextAction === "Kickoff / onboarding call") a.nextAction = ONBOARDING_ACTION;
@@ -234,7 +238,8 @@
       tr.tabIndex = 0;
       if (a.id === openId) tr.className = "selected";
       const cells = [
-        [a.company, [a.city, a.state].filter(Boolean).join(", ")],
+        [a.company, [[a.city, a.state].filter(Boolean).join(", "),
+          a.ownerEmail && hub.auth && a.ownerEmail !== hub.auth.email ? `owner ${a.ownerEmail}` : ""].filter(Boolean).join(" · ")],
         [(hub.ref.REGIONS || {})[a.region] || ""],
         null,
         [[...m.lines].map((l) => short[l]).join(" · ") || "—"],
@@ -322,8 +327,9 @@
     "otherContacts", "notes"];
 
   function onboardingProgress(acct) {
-    const done = ONBOARDING_STEPS.filter(([k]) => (acct.onboarding || {})[k]).length;
-    return { done, total: ONBOARDING_STEPS.length };
+    const steps = stepsFor(acct);
+    const done = steps.filter(([k]) => (acct.onboarding || {})[k]).length;
+    return { done, total: steps.length };
   }
 
   function renderOnboarding(acct) {
@@ -335,9 +341,11 @@
     const { done, total } = onboardingProgress(acct);
     $("ad-onboarding-aside").textContent = `${done}/${total} steps`;
     $("ad-onboarding-bar").style.width = `${Math.round((done / total) * 100)}%`;
+    $("ad-nonprofit").checked = !!acct.nonProfit;
+    $("ad-resells").checked = !!acct.resells;
     const ul = $("ad-onboarding");
     ul.replaceChildren();
-    for (const [key, label] of ONBOARDING_STEPS) {
+    for (const [key, label] of stepsFor(acct)) {
       const li = document.createElement("li");
       const lab = document.createElement("label");
       lab.className = "check";
@@ -361,6 +369,31 @@
     $("ad-onboarding-done").hidden = done < total;
   }
 
+  function finishOnboardingIfDone(acct) {
+    const { done, total } = onboardingProgress(acct);
+    if (done === total && acct.status === "onboarding") {
+      acct.status = "active";
+      acct.nextAction = "First business review";
+      acct.nextActionDate = hub.addDays(hub.today(), 90);
+      log(acct.id, "note", "Customer onboarding complete — account is Active.");
+      form.elements.status.value = acct.status;
+      form.elements.nextAction.value = acct.nextAction;
+      form.elements.nextActionDate.value = acct.nextActionDate;
+    }
+  }
+
+  // Whether the certificate steps apply to this customer.
+  for (const [id, field] of [["ad-nonprofit", "nonProfit"], ["ad-resells", "resells"]]) {
+    $(id).addEventListener("change", (e) => {
+      const acct = findAccount(openId);
+      if (!acct) return;
+      acct[field] = e.target.checked;
+      finishOnboardingIfDone(acct);
+      acct.updated = new Date().toISOString();
+      hub.save();
+    });
+  }
+
   $("ad-onboarding").addEventListener("change", (e) => {
     const key = e.target.dataset.step;
     const acct = findAccount(openId);
@@ -373,18 +406,8 @@
     } else {
       delete acct.onboarding[key];
     }
-    const { done, total } = onboardingProgress(acct);
-    if (done === total && acct.status === "onboarding") {
-      acct.status = "active";
-      acct.nextAction = "First business review";
-      acct.nextActionDate = hub.addDays(hub.today(), 90);
-      log(acct.id, "note", "Customer onboarding complete — account is Active.");
-      form.elements.status.value = acct.status;
-      form.elements.nextAction.value = acct.nextAction;
-      form.elements.nextActionDate.value = acct.nextActionDate;
-    } else if (done < total && acct.status === "onboarding") {
-      acct.nextAction = ONBOARDING_ACTION;
-    }
+    finishOnboardingIfDone(acct);
+    if (acct.status === "onboarding") acct.nextAction = ONBOARDING_ACTION;
     acct.updated = new Date().toISOString();
     hub.save();
   });
@@ -524,13 +547,26 @@
   // The owner (sign-in email) decides who can open the account; only managers reassign.
   function renderOwner(acct) {
     const input = $("ad-owner-email");
-    input.value = acct.ownerEmail || (hub.auth && hub.auth.email) || "";
+    const me = hub.auth && hub.auth.email;
+    input.value = acct.ownerEmail || me || "";
     const manager = hub.auth && hub.auth.role === "manager";
+    const open = ytdSpend(acct) <= 0;
     input.readOnly = !manager;
+    $("ad-claim").hidden = manager || !open || !me || acct.ownerEmail === me;
     $("ad-owner-hint").textContent = manager
       ? "As a manager you can reassign this account; the new owner gets full access."
-      : "Only the owner and managers can open this account. Other reps see just its name, address, phone and YTD spend on the map.";
+      : open
+        ? "Prospective account (no orders this year): every rep can manage it. Once it orders, only its owner and managers can open it."
+        : "Only the owner and managers can open this account. Other reps see just its name, address, phone and YTD spend.";
   }
+  $("ad-claim").addEventListener("click", () => {
+    const acct = findAccount(openId);
+    if (!acct || !hub.auth) return;
+    acct.ownerEmail = hub.auth.email;
+    acct.updated = new Date().toISOString();
+    renderOwner(acct);
+    hub.save();
+  });
   $("ad-owner-email").addEventListener("change", (e) => {
     const acct = findAccount(openId);
     if (!acct || !(hub.auth && hub.auth.role === "manager")) return;

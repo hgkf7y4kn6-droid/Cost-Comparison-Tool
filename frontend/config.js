@@ -1,8 +1,11 @@
-// URL of the backend deployed on Render (no trailing slash).
-// Update this after the Render service is created, then redeploy the frontend.
-// This is the existing Render service "Cost-Comparison-Tool" (created by hand,
-// not from render.yaml, which would have named it cost-comparison-backend).
-window.API_BASE = "https://cost-comparison-tool.onrender.com";
+// Where the API lives (no trailing slash).
+// When the backend serves this page itself (Render, or `uvicorn` locally on
+// port 8000), the API is on the same address. A separate static host (e.g.
+// Cloudflare) calls the Render service.
+window.API_BASE =
+  location.origin === "https://cost-comparison-tool.onrender.com" || location.port === "8000"
+    ? ""
+    : "https://cost-comparison-tool.onrender.com";
 
 // Google Maps Platform browser key for the Prospecting map and the "Add from
 // Google Maps" business search. Create it in Google Cloud with the Maps

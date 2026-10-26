@@ -4,22 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sales Hub</title>
+  <meta name="description" content="Sales Hub — prospecting, cost comparisons, proposals and accounts in one place.">
+  <meta name="theme-color" content="#0f1a2c">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23a87a2a'/%3E%3Cpath d='M8 21.5 L13.5 16 L17.5 19.5 L24 12 M19.5 12 H24 V16.5' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/plus-jakarta-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/dm-serif-display-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="app-header">
-    <h1>Sales Hub</h1>
-    <div id="auth-bar" class="auth-bar" hidden>
-      Signed in as <strong id="auth-user"></strong>
-      <button type="button" class="link-btn" id="auth-signout">Sign out</button>
+    <div class="topbar">
+      <a class="brand" href="#today" aria-label="Sales Hub — Today"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#a87a2a"/><path d="M8 21.5 L13.5 16 L17.5 19.5 L24 12" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 12 H24 V16.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-name">Sales Hub</span></a>
+      <nav class="tabs" role="tablist" aria-label="Sales cycle stages">
+        <button type="button" role="tab" id="tab-btn-today" aria-controls="tab-today" data-tab="today">Today</button>
+        <button type="button" role="tab" id="tab-btn-prospecting" aria-controls="tab-prospecting" data-tab="prospecting">Prospecting</button>
+        <button type="button" role="tab" id="tab-btn-compare" aria-controls="tab-compare" data-tab="compare">Cost Comparison</button>
+        <button type="button" role="tab" id="tab-btn-quotes" aria-controls="tab-quotes" data-tab="quotes">Proposals</button>
+        <button type="button" role="tab" id="tab-btn-accounts" aria-controls="tab-accounts" data-tab="accounts">Accounts</button>
+      </nav>
+      <div id="auth-bar" class="auth-bar" hidden>
+        <strong id="auth-user"></strong>
+        <button type="button" class="link-btn" id="auth-signout">Sign out</button>
+      </div>
     </div>
-    <nav class="tabs" role="tablist" aria-label="Sales cycle stages">
-      <button type="button" role="tab" id="tab-btn-today" aria-controls="tab-today" data-tab="today">Today</button>
-      <button type="button" role="tab" id="tab-btn-prospecting" aria-controls="tab-prospecting" data-tab="prospecting">1. Prospecting</button>
-      <button type="button" role="tab" id="tab-btn-compare" aria-controls="tab-compare" data-tab="compare">2. Cost Comparison</button>
-      <button type="button" role="tab" id="tab-btn-quotes" aria-controls="tab-quotes" data-tab="quotes">3. Proposals &amp; Quotes</button>
-      <button type="button" role="tab" id="tab-btn-accounts" aria-controls="tab-accounts" data-tab="accounts">4. Accounts</button>
-    </nav>
+  </header>
+  <div class="deal-strip">
     <div class="deal-bar" id="deal-bar" aria-label="Current deal">
       <div id="deal-active" class="deal-active" hidden>
         <span class="muted">Working on</span>
@@ -37,7 +47,7 @@
         <button type="button" class="link-btn" id="deal-clear" title="Stop working on this deal" aria-label="Stop working on this deal">✕</button>
       </span>
     </div>
-  </header>
+  </div>
 
   <main>
   <!-- ===================== TODAY TAB ===================== -->
@@ -57,8 +67,7 @@
 
   <!-- ===================== PROSPECTING TAB ===================== -->
   <div id="tab-prospecting" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-prospecting" hidden>
-    <h2 class="panel-title">Prospecting — Philadelphia · New Jersey · Allentown · Lancaster</h2>
-    <p class="hint">Build a regional lead list from public, government-published business data, clean it, enrich it through a licensed B2B platform, then work it through the pipeline. Qualified leads hand off to the Cost Comparison tab.</p>
+    <h2 class="panel-title">Prospecting <span class="muted">Philadelphia · New Jersey · Lehigh Valley · Lancaster</span></h2>
 
     <!-- Pipeline overview -->
     <div class="pipeline-bar" id="stage-counts" aria-live="polite"></div>
@@ -66,7 +75,7 @@
     <!-- Service region map -->
     <section class="xcard" data-card="region-map">
       <div class="xcard-head">
-        <div class="xcard-titles"><h2>Service region map</h2><p class="xcard-sub">Customer accounts ★ and your prospects, pinned at their company address.</p></div>
+        <div class="xcard-titles"><h2>Service region map</h2><p class="xcard-sub">Customers in green (darker = more spend this year); prospects in grey, open to every rep.</p></div>
         <span class="xcard-aside" id="map-aside"></span>
       </div>
       <div class="xcard-body">
@@ -76,9 +85,9 @@
             <div id="map-place-slot" class="map-place-slot"><input type="search" disabled placeholder="Loading Google Maps…"></div>
           </div>
           <div class="map-filters" role="group" aria-label="Show on map">
-            <label class="check"><input type="checkbox" id="map-show-accounts" checked> My accounts</label>
-            <label class="check"><input type="checkbox" id="map-show-others" checked> Other reps' accounts</label>
+            <label class="check"><input type="checkbox" id="map-show-customers" checked> Customers</label>
             <label class="check"><input type="checkbox" id="map-show-prospects" checked> Prospects</label>
+            <label class="check"><input type="checkbox" id="map-only-mine"> Only mine</label>
           </div>
         </div>
         <div id="place-preview" class="place-preview" hidden>
@@ -159,7 +168,7 @@
         <div class="xcard-titles"><h2>Import leads</h2><p class="xcard-sub">CSV, Excel or PDF — you review the columns before anything is imported.</p></div>
       </div>
       <div class="xcard-body">
-      <p class="hint">CSV, Excel (.xlsx / .xls) or PDF from any of the sources above, or a re-import of an enriched export. You'll review the rows and confirm which column is which before anything is imported. Column names are recognized automatically when present (company / business name, address, city, county, state, zip, industry, employees, website, email, phone, contact name/title, email status, source); PDFs can be ruled tables, aligned columns, or directory listings. See <a href="prospects_template.csv" download>prospects_template.csv</a>.</p>
+      <p class="hint">Columns are recognized automatically; PDFs can be tables or directory listings. Template: <a href="prospects_template.csv" download>prospects_template.csv</a>.</p>
       <form id="lead-import-form">
         <input type="file" id="lead-file" accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
         <input type="text" id="lead-source" placeholder="Source label (e.g. PA DOS registry, OpenDataPhilly, Lancaster Chamber)">
@@ -167,7 +176,7 @@
         <label class="check"><input type="checkbox" id="skip-headcount"> Drop rows whose known headcount is outside 20–500</label>
         <button type="submit" class="btn blue">Read File</button>
       </form>
-      <p class="hint">CSV is read in your browser. Excel and PDF are read by the backend server (nothing is stored there); scanned PDFs are OCR'd, so check those rows carefully.</p>
+      <p class="hint">Scanned PDFs are read with OCR — check those rows carefully.</p>
 
       <div id="import-review" class="review" hidden>
         <h3>Review import — <span id="ir-file"></span></h3>
@@ -336,7 +345,7 @@
 
   <!-- ===================== COST COMPARISON TAB ===================== -->
   <div id="tab-compare" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-compare" hidden>
-    <h2 class="panel-title">Good / Better / Best Comparison</h2>
+    <h2 class="panel-title">Cost Comparison <span class="muted">Good · Better · Best</span></h2>
 
     <!-- Step 1: catalog -->
     <section class="xcard" data-card="compare-catalog">
@@ -440,7 +449,7 @@
   <!-- ===================== PROPOSALS & QUOTES TAB ===================== -->
   <div id="tab-quotes" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-quotes" hidden>
     <h2 class="panel-title">Proposals &amp; Quotes</h2>
-    <p class="hint">Build a proposal one line item at a time — pick a category, choose the item, and price it by margin or sell price. Winning a quote creates the account.</p>
+
     <div class="kpis" id="q-kpis" aria-live="polite"></div>
 
     <section class="xcard" data-card="quotes-list">
@@ -559,7 +568,7 @@
             <label>Delivery / installation ($) <input type="number" name="delivery" min="0" step="0.01"></label>
             <label>Discount (%) <input type="number" name="discountPct" min="0" max="100" step="0.1"></label>
             <label>Sales tax rate (%) <input type="number" name="taxRate" min="0" step="0.001"></label>
-            <label class="check"><input type="checkbox" name="taxExempt"> Customer is tax-exempt (certificate on file)</label>
+            <label class="check"><input type="checkbox" name="taxExempt"> Tax-exempt non-profit (certificate on file)</label>
             <label>Status <select name="status"></select></label>
             <label id="qe-loss-wrap" hidden>Loss reason <select name="lossReason"></select></label>
             <p class="hint span-2">Tax rate defaults from the customer's location (Philadelphia 8%, rest of PA 6%, NJ 6.625%). Confirm rates and exemptions for each deal — clothing is generally exempt in PA and NJ.</p>
@@ -683,7 +692,7 @@
   <!-- ===================== ACCOUNTS TAB ===================== -->
   <div id="tab-accounts" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-accounts" hidden>
     <h2 class="panel-title">Accounts</h2>
-    <p class="hint">Customers created when a quote is won (or added by hand). Track recurring value and savings delivered, log every touch, keep a next action on each account, and spot cross-sell gaps and upcoming renewals.</p>
+
     <div class="kpis" id="a-kpis" aria-live="polite"></div>
     <p data-sync-status class="sync-status"></p>
 
@@ -737,6 +746,10 @@
           <span class="xcard-aside" id="ad-onboarding-aside"></span>
         </div>
         <div class="xcard-body">
+          <div class="onboarding-flags">
+            <label class="check"><input type="checkbox" id="ad-nonprofit"> Non-profit (needs a tax-exempt certificate)</label>
+            <label class="check"><input type="checkbox" id="ad-resells"> Will resell some of the supplies (needs a resale certificate)</label>
+          </div>
           <div class="progress" aria-hidden="true"><div class="progress-fill" id="ad-onboarding-bar"></div></div>
           <ul class="checklist" id="ad-onboarding"></ul>
           <p class="hint" id="ad-onboarding-done" hidden>Onboarding complete — the account is Active. Next up: a first business review in 90 days.</p>
@@ -761,7 +774,8 @@
         <label>Company <input type="text" name="company" required></label>
         <label>Status <select name="status"></select></label>
         <label>Account owner (name) <input type="text" name="owner"></label>
-        <label>Owner sign-in email <input type="email" id="ad-owner-email"><small class="muted" id="ad-owner-hint"></small></label>
+        <label>Owner sign-in email <input type="email" id="ad-owner-email"><small class="muted" id="ad-owner-hint"></small>
+          <button type="button" class="btn small" id="ad-claim" hidden>Make me the owner</button></label>
         <label>Locations served <input type="number" name="locations" min="1" step="1"></label>
         <label>Primary contact <input type="text" name="contactName"></label>
         <label>Title <input type="text" name="contactTitle"></label>
@@ -832,7 +846,8 @@
 
   <div id="signin" class="signin-backdrop" role="dialog" aria-modal="true" aria-labelledby="signin-title" hidden>
     <form id="signin-form" class="signin-card">
-      <h2 id="signin-title">Sign in to the Sales Hub</h2>
+      <span class="brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#a87a2a"/><path d="M8 21.5 L13.5 16 L17.5 19.5 L24 12" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 12 H24 V16.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-name">Sales Hub</span></span>
+      <h2 id="signin-title">Welcome back</h2>
       <p id="signin-message" class="hint"></p>
       <label>Email <input type="email" id="signin-email" autocomplete="username" required></label>
       <label>Password <input type="password" id="signin-password" autocomplete="current-password" required></label>

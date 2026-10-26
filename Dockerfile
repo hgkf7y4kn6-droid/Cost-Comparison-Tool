@@ -21,6 +21,8 @@ RUN python -c "from transformers import CLIPModel, CLIPProcessor; \
 m='openai/clip-vit-base-patch32'; CLIPModel.from_pretrained(m); CLIPProcessor.from_pretrained(m)"
 
 COPY backend.py table_extract.py auth.py accounts_store.py ./
+# The web app, served by the backend at "/"
+COPY frontend ./frontend
 
 # Render injects PORT; default to 8000 for local `docker run`
 CMD ["sh", "-c", "uvicorn backend:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -1,13 +1,12 @@
 // Service-region map on the Prospecting tab (Google Maps JavaScript API).
 //
 // Pins:
-// - customer accounts: a star-topped pin, green, darker the more they've
-//   spent this year (YTD orders). Your own accounts (all accounts for a
-//   manager) open in full on click; other reps' accounts show only name,
-//   address, phone and YTD spend — that limited record is all the server
-//   sends for them (see accounts_store.py).
-// - prospects (your leads not yet won): a round pin, blue to purple as the
-//   lead moves through the pipeline. Click to open the lead.
+// - customer accounts (ordering this year): a star-topped pin, green, darker
+//   the more they've spent year to date. Your own (any, for a manager) open in
+//   full; other reps' show only name, address, phone and YTD spend — that
+//   limited record is all the server sends (see accounts_store.py).
+// - prospects, in grey and open to every rep: prospective accounts (no orders
+//   this year) as grey star pins, and leads as grey round pins.
 //
 // Addresses without a map position are looked up with Google's geocoder a few
 // at a time; positions are refreshed after 30 days, in line with Google's
@@ -27,22 +26,17 @@
   const GEO_PER_BATCH = 250;
   const GEO_DELAY_MS = 250;
 
-  // YTD spend tiers for account pins, light to dark green.
+  // YTD spend tiers for customer pins, light to dark green.
   const SPEND_TIERS = [
-    { min: 0, color: "#9ae6b4", label: "Under $5k" },
+    { min: 0.01, color: "#9ae6b4", label: "Under $5k" },
     { min: 5000, color: "#48bb78", label: "$5k–$25k" },
     { min: 25000, color: "#2f855a", label: "$25k–$100k" },
     { min: 100000, color: "#22543d", label: "$100k–$250k" },
     { min: 250000, color: "#123524", label: "$250k+" },
   ];
-  const tierFor = (spend) => [...SPEND_TIERS].reverse().find((t) => (spend || 0) >= t.min) || SPEND_TIERS[0];
-
-  const PROSPECT_COLORS = [
-    { stages: ["new", "enriched", "verified"], color: "#63b3ed", label: "New / enriched / verified" },
-    { stages: ["contacted", "qualified"], color: "#2b6cb0", label: "Contacted / qualified" },
-    { stages: ["proposal"], color: "#6b46c1", label: "Proposal sent" },
-  ];
-  const prospectColor = (stage) => (PROSPECT_COLORS.find((p) => p.stages.includes(stage)) || PROSPECT_COLORS[0]).color;
+  const PROSPECT_GREY = "#a0a7b4";
+  const tierFor = (spend) => [...SPEND_TIERS].reverse().find((t) => (spend || 0) >= t.min) || null;
+  const accountColor = (spend) => (tierFor(spend) || { color: PROSPECT_GREY }).color;
 
   // --- Pin artwork (SVG) -------------------------------------------------------
 
@@ -75,28 +69,29 @@
   function pins() {
     const out = [];
     const show = {
-      mine: $("map-show-accounts").checked,
-      others: $("map-show-others").checked,
+      customers: $("map-show-customers").checked,
       prospects: $("map-show-prospects").checked,
+      mineOnly: $("map-only-mine").checked,
     };
+    const me = hub.auth && hub.auth.email;
+    const mineOk = (r) => !show.mineOnly || r.ownerEmail === me;
     const accountLeadIds = new Set(state.accounts.map((a) => a.leadId).filter(Boolean));
-    if (show.mine) {
-      for (const a of state.accounts) {
-        if (a.status === "churned" || !located(a)) continue;
-        const spend = hub.accounts.ytdSpend(a);
-        out.push({ key: `a:${a.id}`, kind: "account", rec: a, spend, svg: accountSvg(tierFor(spend).color, true), w: 32, h: 44 });
-      }
+    for (const a of state.accounts) {
+      if (a.status === "churned" || !located(a) || !mineOk(a)) continue;
+      const spend = hub.accounts.ytdSpend(a);
+      if (spend > 0 ? !show.customers : !show.prospects) continue;
+      out.push({ key: `a:${a.id}`, kind: "account", rec: a, spend, svg: accountSvg(accountColor(spend), a.ownerEmail === me), w: 32, h: 44 });
     }
-    if (show.others) {
+    if (show.customers && !show.mineOnly) {
       for (const a of hub.sharedAccounts || []) {
         if (!located(a)) continue;
-        out.push({ key: `s:${a.id}`, kind: "shared", rec: a, spend: a.ytdSpend, svg: accountSvg(tierFor(a.ytdSpend).color, false), w: 32, h: 44 });
+        out.push({ key: `s:${a.id}`, kind: "shared", rec: a, spend: a.ytdSpend, svg: accountSvg(accountColor(a.ytdSpend), false), w: 32, h: 44 });
       }
     }
     if (show.prospects) {
       for (const l of state.leads) {
-        if (["won", "disqualified"].includes(l.stage) || accountLeadIds.has(l.id) || !located(l)) continue;
-        out.push({ key: `l:${l.id}`, kind: "lead", rec: l, svg: prospectSvg(prospectColor(l.stage)), w: 26, h: 38 });
+        if (["won", "disqualified"].includes(l.stage) || accountLeadIds.has(l.id) || !located(l) || !mineOk(l)) continue;
+        out.push({ key: `l:${l.id}`, kind: "lead", rec: l, svg: prospectSvg(PROSPECT_GREY), w: 26, h: 38 });
       }
     }
     return out;
@@ -269,13 +264,14 @@
       s.textContent = t;
       box.append(s);
     };
-    title("Accounts (YTD spend)");
+    title("Customers (YTD spend)");
     for (const t of SPEND_TIERS) add(accountSvg(t.color, false), t.label, 32, 44);
-    title("Prospects");
-    for (const p of PROSPECT_COLORS) add(prospectSvg(p.color), p.label, 26, 38);
+    title("Prospects — open to all reps");
+    add(accountSvg(PROSPECT_GREY, false), "Account, no orders this year", 32, 44);
+    add(prospectSvg(PROSPECT_GREY), "Lead", 26, 38);
     const note = document.createElement("small");
     note.className = "muted";
-    note.textContent = "Dark outline = your account (opens in full).";
+    note.textContent = "Dark outline = yours.";
     box.append(note);
   }
 
@@ -433,7 +429,7 @@
     picked = null;
   });
 
-  for (const id of ["map-show-accounts", "map-show-others", "map-show-prospects"]) $(id).addEventListener("change", render);
+  for (const id of ["map-show-customers", "map-show-prospects", "map-only-mine"]) $(id).addEventListener("change", render);
   $("map-locate-more").addEventListener("click", geocodeMissing);
 
   // Re-draw on any change, and locate records that gained (or changed) an address.

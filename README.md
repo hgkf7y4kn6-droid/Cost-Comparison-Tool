@@ -1,5 +1,15 @@
-# Cost-Comparison-Tool
-# Office Basics Good/Better/Best Comparison Agent
+# Sales Hub
+
+Prospecting, cost comparisons, proposals and accounts for a field sales team,
+in one web app. The FastAPI backend serves both the API and the web app, so a
+single Render service runs the whole product: open the service's URL, sign in.
+
+Design: ink navy and brass on warm paper, with an automatic dark mode. Type is
+DM Serif Display for titles and headline figures and Plus Jakarta Sans for
+everything else, both self-hosted from `frontend/fonts/` under the SIL Open
+Font License. Responses are gzip-compressed.
+
+# Good/Better/Best Comparison
 
 ## What "good/better/best" means here
 This isn't three quality tiers of the same SKU. It's a **substitution strategy**:
@@ -113,8 +123,9 @@ The stages themselves, one tab each:
      target.
 4. **Accounts** (`frontend/accounts.js`) — customers from won quotes (or added
    by hand). A newly won account starts in **Customer Onboarding**: a
-   seven-step checklist (kickoff, account setup, contacts, contract pricing,
-   tax certificate, delivery, first order) that the deal bar points to; ticking
+   checklist (kickoff, account setup, contacts, contract pricing, delivery,
+   first order — plus a tax-exempt certificate only for a non-profit and a
+   resale certificate only if they'll resell supplies) that the deal bar points to; ticking
    the last step makes the account Active and schedules a first business
    review in 90 days. Accounts also track status (Onboarding / Active / At risk / Churned), owner, contacts,
    renewal date, next action, and an activity log. Shows recurring and one-time
@@ -160,14 +171,19 @@ The Prospecting tab opens with a **service region map** (Google Maps):
 - Addresses are located with Google's geocoder a few at a time and refreshed
   after 30 days.
 
-**Who sees what.** Accounts are stored on the server (`accounts_store.py`,
-SQLite at `$DATA_DIR/sales_hub.db`) with an owner, the rep who created the
-account. The owner and managers can open the full account by clicking its
-pin; any other rep sees only the name, address, general phone number and YTD
-spend. The server enforces this: it never sends other reps the rest of the
-record and rejects their edits. Managers are listed in `AUTH_MANAGERS`
-(comma-separated emails) and can reassign an account's owner. Leads, quotes
-and the item catalog still live in each rep's browser.
+**Who sees what.** Accounts and leads are stored on the server
+(`accounts_store.py`, SQLite at `$DATA_DIR/sales_hub.db`, API under
+`/records/{accounts|leads}/`), each with an owner.
+- **Customers** (accounts with orders this year) are green pins. Their owner
+  and managers can open the full account; any other rep sees only the name,
+  address, general phone number and YTD spend. The server never sends other
+  reps the rest of the record and rejects their edits.
+- **Prospects** (accounts with no orders this year, and all leads) are grey
+  pins, open to every rep: anyone can open and edit them, and claim them with
+  "Make me the owner".
+- Only a record's owner or a manager can delete it. Managers are listed in
+  `AUTH_MANAGERS` (comma-separated emails) and can reassign any record.
+- Quotes and the item catalog still live in each rep's browser.
 
 Setup:
 1. **Google Maps key.** In Google Cloud, enable the *Maps JavaScript API*,

@@ -6,7 +6,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const hub = window.SalesHub;
-  const API = (window.API_BASE || "http://localhost:8000").replace(/\/$/, "");
+  const API = (window.API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
   const KEY = "ob.auth.v1";
   const EMAIL_KEY = "ob.auth.lastEmail"; // prefills the sign-in form
 
