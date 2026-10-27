@@ -58,13 +58,8 @@
     return state.quotes.filter((q) => q.accountId === acct.id || (!q.accountId && acct.leadId && q.leadId === acct.leadId));
   }
 
-  // Year-to-date spend: this calendar year's logged orders (same rule as the server).
-  function ytdSpend(acct) {
-    const year = String(new Date().getFullYear());
-    return (acct.activities || [])
-      .filter((a) => a.type === "order" && String(a.date || "").startsWith(year))
-      .reduce((s, a) => s + (Number(a.amount) || 0), 0);
-  }
+  // Year-to-date spend: this calendar year's orders (orders.js; same rule as the server).
+  const ytdSpend = (acct) => hub.orders.ytd(acct).total;
 
   function metrics(acct) {
     const won = quotesFor(acct).filter((q) => q.status === "won");
@@ -193,9 +188,9 @@
     const overdue = ms.filter((m) => m.overdue).length;
     const renewals = ms.filter((m) => m.renewalSoon).length;
     const stale = ms.filter((m) => m.stale).length;
-    hub.renderTiles($("a-kpis"), [
-      ["Active accounts", String(live.length), `${state.accounts.length - live.length} churned`],
-      ["YTD spend", money(sum("ytd")), "this year's logged orders"],
+    hub.renderTiles($("a-list-kpis"), [
+      ["Accounts", String(live.length), `${state.accounts.length - live.length} churned`],
+      ["YTD spend", money(sum("ytd")), "this year's orders"],
       ["Annual recurring value", money(sum("recurring")), `${money(sum("oneTime"))} one-time won`],
       ["Customer savings delivered", money(sum("savings")), "per year, from won quotes"],
       ["Follow-ups overdue", String(overdue), `${stale} with no touch in ${STALE_DAYS}+ days`],
@@ -322,7 +317,7 @@
 
   // --- Detail ---------------------------------------------------------------
 
-  const FIELDS = ["company", "status", "owner", "contactName", "contactTitle", "email", "phone", "address",
+  const FIELDS = ["company", "status", "customerNumber", "owner", "contactName", "contactTitle", "email", "phone", "address",
     "city", "state", "zip", "locations", "terms", "startDate", "renewalDate", "nextAction", "nextActionDate",
     "otherContacts", "notes"];
 

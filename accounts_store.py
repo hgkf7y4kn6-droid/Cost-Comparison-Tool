@@ -25,26 +25,47 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 KINDS = ("accounts", "leads")
-MAX_RECORD_BYTES = 256 * 1024
+MAX_RECORD_BYTES = 2 * 1024 * 1024  # accounts carry their invoice history
 MAX_BULK = 2000
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 # What a non-owner, non-manager may see of a customer account.
 LIMITED_FIELDS = ("company", "address", "city", "state", "zip", "phone", "lat", "lng")
 
 
-def ytd_spend(data: Dict[str, Any], year: Optional[int] = None) -> float:
-    """Sum of this calendar year's orders logged on the account."""
-    year = year or datetime.now(timezone.utc).year
+def _num(v: Any) -> float:
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def order_spend(order: Dict[str, Any]) -> float:
+    """Merchandise billed on an invoice: shipped quantity x unit price (tax and
+    freight excluded; back-ordered units count when they ship). Mirrors
+    frontend/orders.js."""
     total = 0.0
+    for line in order.get("lines") or []:
+        if not isinstance(line, dict):
+            continue
+        qty = line.get("shipped")
+        qty = line.get("qty") if qty in (None, "") else qty
+        total += _num(qty) * _num(line.get("unitPrice"))
+    return total
+
+
+def ytd_spend(data: Dict[str, Any], year: Optional[int] = None) -> float:
+    """This calendar year's spend: invoiced orders, plus amounts logged on
+    "order" activities from before invoices existed (ones not yet converted)."""
+    year = str(year or datetime.now(timezone.utc).year)
+    total = 0.0
+    for order in data.get("orders") or []:
+        if isinstance(order, dict) and str(order.get("date", "")).startswith(year):
+            total += order_spend(order)
     for act in data.get("activities") or []:
-        if not isinstance(act, dict) or act.get("type") != "order":
+        if not isinstance(act, dict) or act.get("type") != "order" or act.get("orderId"):
             continue
-        if not str(act.get("date", "")).startswith(str(year)):
-            continue
-        try:
-            total += float(act.get("amount") or 0)
-        except (TypeError, ValueError):
-            continue
+        if str(act.get("date", "")).startswith(year):
+            total += _num(act.get("amount"))
     return round(total, 2)
 
 

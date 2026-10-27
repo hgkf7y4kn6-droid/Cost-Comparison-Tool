@@ -693,7 +693,21 @@
   <div id="tab-accounts" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-accounts" hidden>
     <h2 class="panel-title">Accounts</h2>
 
-    <div class="kpis" id="a-kpis" aria-live="polite"></div>
+    <section class="card book-card">
+      <div class="book-head">
+        <div><h2>My book of business</h2><p class="muted" id="book-sub"></p></div>
+        <button type="button" class="btn small" id="orders-import-toggle" aria-expanded="false" aria-controls="orders-import">Import orders</button>
+      </div>
+      <div class="kpis" id="a-kpis" aria-live="polite"></div>
+      <div id="orders-import" class="orders-import" hidden>
+        <p class="hint">Upload your invoice export (CSV or Excel), one row per invoice line. Columns are matched by name: invoice #, invoice date, customer # or account name, PO, SKU, description, qty ordered, qty shipped, back order, unit price, cost, tax, freight, status. Re-importing an invoice replaces it.</p>
+        <form id="orders-import-form" class="row-buttons">
+          <input type="file" id="orders-file" accept=".csv,.xlsx,.xls" required aria-label="Invoice export file">
+          <button type="submit" class="btn small primary">Import</button>
+        </form>
+        <div id="orders-report" aria-live="polite"></div>
+      </div>
+    </section>
     <p data-sync-status class="sync-status"></p>
 
     <div id="a-followups-wrap" class="notice" hidden>
@@ -701,12 +715,17 @@
       <ul id="a-followups" class="plain"></ul>
     </div>
 
-    <section class="xcard" data-card="accounts-list">
+    <div class="book-list-head"><h3>My accounts</h3><span class="muted">Won accounts, largest YTD first. Select a card to see contacts and orders.</span></div>
+    <div id="my-accounts" class="account-cards"></div>
+    <p id="my-accounts-empty" class="hint" hidden>No accounts yet. Accounts appear here when you mark a quote won.</p>
+
+    <section class="xcard" data-card="accounts-list" data-open="false">
       <div class="xcard-head">
-        <div class="xcard-titles"><h2>Accounts</h2><p class="xcard-sub">Select an account to open it.</p></div>
+        <div class="xcard-titles"><h2>All accounts</h2><p class="xcard-sub">Every account you can see, with follow-ups and renewals. Select a row to open it.</p></div>
         <span class="xcard-aside" id="a-count"></span>
       </div>
       <div class="xcard-body">
+      <div class="kpis small" id="a-list-kpis"></div>
       <div class="filters">
         <input type="search" id="a-f-search" placeholder="Search company, city, contact, owner…" aria-label="Search accounts">
         <select id="a-f-status" aria-label="Filter accounts">
@@ -773,6 +792,7 @@
       <form id="account-form" class="grid-form">
         <label>Company <input type="text" name="company" required></label>
         <label>Status <select name="status"></select></label>
+        <label>Customer # <input type="text" name="customerNumber" placeholder="matches imported invoices"></label>
         <label>Account owner (name) <input type="text" name="owner"></label>
         <label>Owner sign-in email <input type="email" id="ad-owner-email"><small class="muted" id="ad-owner-hint"></small>
           <button type="button" class="btn small" id="ad-claim" hidden>Make me the owner</button></label>
@@ -839,6 +859,17 @@
 
   </main>
 
+  <div id="invoice-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="inv-title">
+      <div class="picker-header">
+        <button type="button" class="link-btn picker-back" id="inv-close">‹ Back</button>
+        <div class="picker-heading"><strong id="inv-title" class="picker-title"></strong><small class="muted" id="inv-sub"></small></div>
+        <span class="picker-back" aria-hidden="true"></span>
+      </div>
+      <div class="modal-body" id="inv-body"></div>
+    </div>
+  </div>
+
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
 
   <!-- Filled in and shown only when printing a proposal -->
@@ -866,6 +897,7 @@
   <script src="prospecting.js"></script>
   <script src="catalog.js"></script>
   <script src="quotes.js"></script>
+  <script src="orders.js"></script>
   <script src="accounts.js"></script>
   <script src="sync.js"></script>
   <script src="deal.js"></script>

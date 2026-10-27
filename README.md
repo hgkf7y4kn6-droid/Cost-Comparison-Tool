@@ -133,6 +133,20 @@ The stages themselves, one tab each:
    cross-sell gaps (and who to talk to), follow-ups due this week, accounts
    with no touch in 60+ days, and renewals within 90 days.
 
+   **My book of business** (`frontend/orders.js`) tops the tab: each rep's
+   active accounts, YTD orders and MTD orders, then one card per account they
+   own. Collapsed, a card shows the company, its margin (internal) and YTD
+   orders; expanded, it lists the contacts (click to email or call, add more)
+   and orders newest first. Select an order to see the invoice (lines, ordered
+   vs shipped, totals, internal margin) or edit it. Orders with an item on back
+   order carry a red **Back order** badge on the order and on the account.
+   Orders come from **+ Add order** or **Import orders** (a CSV/Excel invoice
+   export, one row per line, matched to accounts by Customer # or name;
+   re-importing an invoice replaces it). YTD/MTD count shipped quantity ×
+   unit price, before tax and freight — the server uses the same rule for the
+   YTD spend other reps see. Account margin comes from this year's invoice
+   lines that have a cost, or the won proposal until there are any.
+
 All Sales Hub data (leads, quotes, accounts) is stored in the browser's
 `localStorage` via `frontend/store.js` — per browser, per device. Use each
 tab's **Export shown (CSV)** to back up or share; moving this data to a
