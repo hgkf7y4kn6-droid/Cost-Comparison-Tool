@@ -15,38 +15,18 @@
   const $ = (id) => document.getElementById(id);
   const hub = window.SalesHub;
   const state = hub.state;
-  const { money, esc } = hub;
+  const { money, calc } = hub;
 
   const STATUSES = { open: "Open", shipped: "Shipped", invoiced: "Invoiced", paid: "Paid" };
-  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  const has = (v) => v !== "" && v !== undefined && v !== null;
+  const { num, hasValue: has, billedQty, backordered } = calc;
   const pct = (n) => `${n.toFixed(1)}%`;
 
-  // --- Order math --------------------------------------------------------------
+  // --- Order math (calc.js) ----------------------------------------------------
 
-  const billedQty = (l) => (has(l.shipped) ? num(l.shipped) : num(l.qty));
-  const backordered = (l) => (has(l.backordered) ? num(l.backordered) : Math.max(0, num(l.qty) - billedQty(l)));
+  const orderTotals = calc.orderTotals;
 
-  function orderTotals(o) {
-    let merch = 0, costed = 0, cost = 0, boLines = 0, boUnits = 0;
-    for (const l of o.lines || []) {
-      const ext = billedQty(l) * num(l.unitPrice);
-      merch += ext;
-      if (has(l.cost)) {
-        costed += ext;
-        cost += billedQty(l) * num(l.cost);
-      }
-      const bo = backordered(l);
-      if (bo > 0) {
-        boLines++;
-        boUnits += bo;
-      }
-    }
-    const total = merch + num(o.tax) + num(o.freight);
-    return { merch, total, costed, cost, boLines, boUnits, marginPct: costed > 0 ? ((costed - cost) / costed) * 100 : null };
-  }
-
-  const year = () => String(new Date().getFullYear());
+  // Year and month follow the rep's local calendar (the same "today" as everywhere else).
+  const year = () => hub.today().slice(0, 4);
   const month = () => hub.today().slice(0, 7);
 
   function spendSince(acct, prefix) {
@@ -393,6 +373,8 @@
     del.addEventListener("click", () => {
       if (!confirm("Delete this order? It no longer counts toward YTD or MTD.")) return;
       const a = state.accounts.find((x) => x.id === current.acctId);
+      const removed = (a.orders || []).find((x) => x.id === current.orderId);
+      if (removed) a.replacedOrders = [...(a.replacedOrders || []), { at: new Date().toISOString(), reason: "deleted", order: JSON.parse(JSON.stringify(removed)) }].slice(-25);
       a.orders = (a.orders || []).filter((x) => x.id !== current.orderId);
       for (const act of a.activities || []) if (act.orderId === current.orderId) act.amount = 0;
       a.updated = new Date().toISOString();
@@ -575,19 +557,24 @@
   const norm = (h) => String(h || "").toLowerCase().replace(/[^a-z0-9#]/g, "");
   const nameKey = (s) => String(s || "").toLowerCase().replace(/\b(inc|llc|corp|co|company|ltd)\b|[^a-z0-9]/g, "");
 
+  // An ISO date for a real calendar date, or "" when blank, impossible (13/45/2025) or unrecognized.
+  // Slash dates are month/day/year. Rows without a usable date are reported, never dated "today".
   function toIsoDate(v) {
     const s = String(v || "").trim();
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if (m) {
-      const y = m[3].length === 2 ? `20${m[3]}` : m[3];
-      return `${y}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+    let iso = "";
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) iso = s.slice(0, 10);
+    else {
+      const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+      if (m) iso = `${m[3].length === 2 ? `20${m[3]}` : m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+      else if (/^\d{5}$/.test(s)) iso = new Date(Date.UTC(1899, 11, 30) + Number(s) * 86400000).toISOString().slice(0, 10); // Excel serial
     }
-    if (/^\d{5}$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Number(s) * 86400000).toISOString().slice(0, 10); // Excel serial
-    return "";
+    return calc.isRealDate(iso) ? iso : "";
   }
 
-  function importRows(rows) {
+  // Reads the file's rows into a PLAN. Nothing is changed until the rep confirms it
+  // (applyImport): an invoice export can be partial, and replacing an invoice with
+  // fewer lines would quietly lower the account's YTD.
+  function planImport(rows) {
     let header = -1, map = null;
     for (let i = 0; i < Math.min(10, rows.length); i++) {
       const cells = rows[i].map(norm);
@@ -615,45 +602,182 @@
     const byName = new Map(accounts.map((a) => [nameKey(a.company), a]));
     const groups = new Map();
     const unmatched = new Set();
+    const problems = [];
     let skipped = 0;
-    for (const r of rows.slice(header + 1)) {
+    const money2 = (v) => (v === "" ? "" : num(String(v).replace(/[$,]/g, "")));
+    rows.slice(header + 1).forEach((r, offset) => {
+      const rowNo = header + 2 + offset; // counting the file's non-empty rows, header included
       const get = (f) => (map[f] === undefined ? "" : String(r[map[f]] ?? "").trim());
-      if (!r.some((c) => String(c || "").trim())) continue;
+      if (!r.some((c) => String(c || "").trim())) return;
       const acct = byNumber.get(get("customerNumber").toLowerCase()) || byName.get(nameKey(get("account")));
       if (!acct) {
         unmatched.add(get("account") || get("customerNumber") || "(blank customer)");
-        continue;
+        return;
       }
-      const date = toIsoDate(get("date")) || hub.today();
-      const invoice = get("invoice");
-      const key = `${acct.id}|${invoice || date}`;
-      if (!groups.has(key)) {
-        groups.set(key, { acct, order: { id: hub.newId("ord"), number: invoice, date, po: get("po"), status: (get("status").toLowerCase() in STATUSES) ? get("status").toLowerCase() : "invoiced", tax: 0, freight: 0, notes: "", source: "import", lines: [] } });
+      const date = toIsoDate(get("date"));
+      if (!date) {
+        problems.push({ row: rowNo, text: get("date") ? "the date isn't a real date (use YYYY-MM-DD or MM/DD/YYYY)" : "there is no date" });
+        return;
       }
-      const g = groups.get(key).order;
-      const money2 = (v) => (v === "" ? "" : num(String(v).replace(/[$,]/g, "")));
       const price = money2(get("unitPrice"));
       if (price === "" && !get("sku") && !get("name")) {
         skipped++;
-        continue;
+        return;
       }
-      g.lines.push({ sku: get("sku"), name: get("name"), qty: num(get("qty") || 1), shipped: money2(get("shipped")), backordered: money2(get("backordered")), unitPrice: price === "" ? 0 : price, cost: money2(get("cost")) });
+      const invoice = get("invoice");
+      const key = `${acct.id}|${invoice || date}`;
+      if (!groups.has(key)) {
+        groups.set(key, { acct, rows: [], order: { id: hub.newId("ord"), number: invoice, date, po: get("po"), status: (get("status").toLowerCase() in STATUSES) ? get("status").toLowerCase() : "invoiced", tax: 0, freight: 0, notes: "", source: "import", lines: [] } });
+      }
+      const g = groups.get(key);
+      g.rows.push(rowNo);
+      g.order.lines.push({ sku: get("sku"), name: get("name"), qty: num(get("qty") || 1), shipped: money2(get("shipped")), backordered: money2(get("backordered")), unitPrice: price === "" ? 0 : price, cost: money2(get("cost")) });
       // Tax and freight usually repeat on every line of an invoice: keep the largest.
-      g.tax = Math.max(num(g.tax), num(money2(get("tax"))));
-      g.freight = Math.max(num(g.freight), num(money2(get("freight"))));
-    }
-    let added = 0, replaced = 0;
-    for (const { acct, order } of groups.values()) {
-      const existing = (acct.orders || []).find((o) => order.number && o.number === order.number);
+      g.order.tax = Math.max(num(g.order.tax), num(money2(get("tax"))));
+      g.order.freight = Math.max(num(g.order.freight), num(money2(get("freight"))));
+    });
+
+    const items = [];
+    let unchanged = 0;
+    for (const g of groups.values()) {
+      const { acct, order } = g;
+      const sameNumber = (o) => order.number && String(o.number || "").trim().toLowerCase() === order.number.toLowerCase();
+      const existing = (acct.orders || []).find(sameNumber) || null;
+      const nt = orderTotals(order);
       if (existing) {
-        order.id = existing.id;
-        replaced++;
-      } else added++;
-      acct.orders = [...(acct.orders || []).filter((o) => o.id !== order.id), order].sort(byNewest);
-      acct.updated = new Date().toISOString();
+        const et = orderTotals(existing);
+        const sameContent = et.merch === nt.merch && (existing.lines || []).length === order.lines.length && existing.date === order.date;
+        if (sameContent) {
+          unchanged++; // re-importing the same file: nothing to do
+          continue;
+        }
+        const shrinks = order.lines.length < (existing.lines || []).length || nt.merch < et.merch;
+        items.push({ ...g, kind: "replace", existing, before: { lines: (existing.lines || []).length, merch: et.merch }, after: { lines: order.lines.length, merch: nt.merch }, suspicious: shrinks });
+      } else if (!order.number) {
+        // No invoice number to match on: treat an identical order on the same date as already imported.
+        const twin = (acct.orders || []).find((o) => !o.number && o.date === order.date && orderTotals(o).merch === nt.merch && (o.lines || []).length === order.lines.length);
+        if (twin) unchanged++;
+        else items.push({ ...g, kind: "add", noNumber: true, after: { lines: order.lines.length, merch: nt.merch } });
+      } else {
+        items.push({ ...g, kind: "add", after: { lines: order.lines.length, merch: nt.merch } });
+      }
     }
-    if (groups.size) hub.save();
-    return { added, replaced, skipped, unmatched: [...unmatched] };
+    return { items, unmatched: [...unmatched], problems, skipped, unchanged };
+  }
+
+  let lastImport = null; // { added: [{acct, id}], replaced: [{acct, previous}] } — undo for this page session
+
+  function applyImport(items) {
+    const undo = { added: [], replaced: [] };
+    const now = new Date().toISOString();
+    for (const it of items) {
+      const { acct, order } = it;
+      if (it.kind === "replace") {
+        // The version being replaced is kept on the account, so it can be recovered later.
+        acct.replacedOrders = [...(acct.replacedOrders || []), { at: now, reason: "invoice import", order: JSON.parse(JSON.stringify(it.existing)) }].slice(-25);
+        order.id = it.existing.id;
+        undo.replaced.push({ acct, previous: JSON.parse(JSON.stringify(it.existing)) });
+      } else {
+        undo.added.push({ acct, id: order.id });
+      }
+      acct.orders = [...(acct.orders || []).filter((o) => o.id !== order.id), order].sort(byNewest);
+      acct.updated = now;
+    }
+    lastImport = undo;
+    if (items.length) hub.save();
+  }
+
+  function undoImport() {
+    if (!lastImport) return;
+    const now = new Date().toISOString();
+    for (const { acct, id } of lastImport.added) {
+      acct.orders = (acct.orders || []).filter((o) => o.id !== id);
+      acct.updated = now;
+    }
+    for (const { acct, previous } of lastImport.replaced) {
+      acct.orders = [...(acct.orders || []).filter((o) => o.id !== previous.id), previous].sort(byNewest);
+      const history = acct.replacedOrders || [];
+      const idx = history.map((r) => r.order.id).lastIndexOf(previous.id);
+      if (idx >= 0) history.splice(idx, 1); // the entry this import added
+      acct.replacedOrders = history;
+      acct.updated = now;
+    }
+    lastImport = null;
+    hub.save();
+  }
+
+  function renderPlan(report, plan) {
+    report.replaceChildren();
+    const add = (cls, text) => {
+      const p = el("p", cls, text);
+      report.append(p);
+      return p;
+    };
+    const adds = plan.items.filter((i) => i.kind === "add");
+    const repl = plan.items.filter((i) => i.kind === "replace");
+    report.className = "notice";
+    add("", `Review before importing: ${adds.length} new order${adds.length === 1 ? "" : "s"}, ${repl.length} existing invoice${repl.length === 1 ? "" : "s"} to update${plan.unchanged ? `, ${plan.unchanged} already up to date` : ""}.`);
+    if (plan.skipped) add("hint", `${plan.skipped} blank rows skipped.`);
+    if (plan.unmatched.length) add("hint", `No matching account of yours for: ${plan.unmatched.slice(0, 8).join(", ")}${plan.unmatched.length > 8 ? "…" : ""} — those rows are left out. Add the customer number on the account, or check the name.`);
+    if (plan.problems.length) {
+      add("status err", `${plan.problems.length} row${plan.problems.length === 1 ? " was" : "s were"} left out:`);
+      const ul = el("ul", "plain-list");
+      for (const pr of plan.problems.slice(0, 10)) ul.append(el("li", "", `Row ${pr.row}: ${pr.text}.`));
+      if (plan.problems.length > 10) ul.append(el("li", "", `…and ${plan.problems.length - 10} more.`));
+      report.append(ul);
+    }
+    const noNum = adds.filter((i) => i.noNumber).length;
+    if (noNum) add("hint", `${noNum} order${noNum === 1 ? " has" : "s have"} no invoice number, so they can't be matched if you import the same file again; identical ones on the same date are skipped.`);
+
+    const checks = [];
+    if (repl.length) {
+      add("", "Invoices that will be replaced (the old version is kept on the account):");
+      const ul = el("ul", "plain-list");
+      for (const it of repl) {
+        const li = el("li");
+        const label = el("label", "");
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = !it.suspicious;
+        checks.push([box, it]);
+        label.append(box, document.createTextNode(` ${it.acct.company} — invoice ${it.order.number}: ${it.before.lines} line${it.before.lines === 1 ? "" : "s"}, ${money(it.before.merch)} → ${it.after.lines} line${it.after.lines === 1 ? "" : "s"}, ${money(it.after.merch)}`));
+        li.append(label);
+        if (it.suspicious) li.append(el("div", "status err", "The file has fewer lines or a lower total than what's on the account — it may be a partial export. Left unchecked; tick it only if the file is the complete invoice."));
+        ul.append(li);
+      }
+      report.append(ul);
+    }
+    const row = el("div", "row-buttons");
+    const go = el("button", "btn small primary", "Import");
+    const cancel = el("button", "btn small", "Cancel");
+    go.type = cancel.type = "button";
+    const nothing = !adds.length && !repl.length;
+    go.disabled = nothing;
+    if (nothing) add("hint", "Nothing to import.");
+    go.addEventListener("click", () => {
+      const chosen = [...adds, ...checks.filter(([box]) => box.checked).map(([, it]) => it)];
+      applyImport(chosen);
+      const skippedReplace = repl.length - checks.filter(([box]) => box.checked).length;
+      report.replaceChildren();
+      report.className = "notice";
+      add("", `${chosen.filter((i) => i.kind === "add").length} order(s) added, ${chosen.filter((i) => i.kind === "replace").length} replaced${skippedReplace ? `, ${skippedReplace} left as they were` : ""}.`);
+      const undo = el("button", "btn small", "Undo this import");
+      undo.type = "button";
+      undo.addEventListener("click", () => {
+        undoImport();
+        report.replaceChildren();
+        add("", "Import undone.");
+      });
+      if (chosen.length) report.append(undo);
+      $("orders-file").value = "";
+    });
+    cancel.addEventListener("click", () => {
+      report.replaceChildren();
+      report.hidden = true;
+      $("orders-file").value = "";
+    });
+    row.append(go, cancel);
+    report.append(row);
   }
 
   $("orders-import-toggle").addEventListener("click", () => {
@@ -671,23 +795,17 @@
     report.textContent = "Reading…";
     try {
       const sheets = await hub.readTableFile(file);
-      let r = { error: "No sheet had the expected columns." };
+      let plan = { error: "No sheet had the expected columns." };
       for (const s of sheets) {
-        r = importRows(s.rows);
-        if (!r.error) break;
+        plan = planImport(s.rows);
+        if (!plan.error) break;
       }
-      if (r.error) {
+      if (plan.error) {
         report.className = "status err";
-        report.textContent = r.error;
+        report.textContent = plan.error;
         return;
       }
-      report.textContent = [
-        `${r.added} order${r.added === 1 ? "" : "s"} added`,
-        r.replaced ? `${r.replaced} updated (same invoice number)` : "",
-        r.skipped ? `${r.skipped} blank rows skipped` : "",
-        r.unmatched.length ? `No matching account of yours for: ${r.unmatched.slice(0, 8).join(", ")}${r.unmatched.length > 8 ? "…" : ""} — add the customer number on the account, or check the name.` : "",
-      ].filter(Boolean).join(" · ");
-      $("orders-file").value = "";
+      renderPlan(report, plan);
     } catch (err) {
       report.className = "status err";
       report.textContent = err.message;
@@ -696,7 +814,7 @@
 
   // --- Wiring ----------------------------------------------------------------
 
-  hub.orders = { orderTotals, ytd, mtd, margin, STATUSES, open: openOrder };
+  hub.orders = { orderTotals, ytd, mtd, margin, STATUSES, open: openOrder, toIsoDate, planImport, applyImport };
 
   let timer = null;
   hub.on(() => {

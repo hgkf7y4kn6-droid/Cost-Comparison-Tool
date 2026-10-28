@@ -44,15 +44,25 @@
   // --- Storage -----------------------------------------------------------------
 
   let items = [];
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (saved && Array.isArray(saved.items)) items = saved.items;
-  } catch (_) {
-    items = [];
-  }
   let bySku = new Map();
   const reindex = () => (bySku = new Map(items.filter((i) => i.sku).map((i) => [i.sku.toLowerCase(), i])));
-  reindex();
+
+  function loadItems() {
+    items = [];
+    const raw = hub.persistence.storage.get(KEY);
+    try {
+      const saved = JSON.parse(raw || "null");
+      if (saved && Array.isArray(saved.items)) items = saved.items;
+    } catch (_) {
+      // Keep what was unreadable instead of letting the next import overwrite it.
+      hub.persistence.setAside(raw, "item catalog unreadable");
+      hub.persistence.notify("catalog-corrupt", "The saved item catalog couldn't be read, so it's empty. A copy was kept — open Backup to download it, or import your cost file again.", "warn");
+    }
+    reindex();
+  }
+  loadItems();
+  // A different person signing in on this browser gets their own catalog (store.js moves it aside/back).
+  hub.persistence.onUserSwitch(loadItems);
 
   function persist() {
     try {

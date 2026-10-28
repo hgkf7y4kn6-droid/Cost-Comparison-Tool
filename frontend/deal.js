@@ -15,7 +15,7 @@
 
   const findLead = (id) => state.leads.find((l) => l.id === id);
   const findAccount = (id) => state.accounts.find((a) => a.id === id);
-  const daysSince = (iso) => Math.round((Date.now() - new Date(`${iso.slice(0, 10)}T12:00:00`)) / 86400000);
+  const daysSince = (iso) => Math.round((new Date(`${hub.today()}T12:00:00`) - new Date(`${hub.calc.toLocalDate(iso)}T12:00:00`)) / 86400000);
   const dealKey = (d) => (d ? `${d.kind}:${d.id}` : "");
 
   function resolve(deal = state.activeDeal) {

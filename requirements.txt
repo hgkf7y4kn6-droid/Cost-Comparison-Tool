@@ -8,7 +8,7 @@ openpyxl
 xlrd
 pdfplumber
 python-docx
-Pillow
+Pillow>=13.0.0
 pytesseract
 faiss-cpu
 torch

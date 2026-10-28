@@ -55,8 +55,14 @@
     $("signin").hidden = true;
     $("auth-bar").hidden = false;
     $("auth-user").textContent = session.role === "manager" ? `${session.email} (manager)` : session.email;
-    setAppInert(false);
     hub.auth = { email: session.email, role: session.role || "rep" };
+    // Local data (proposals, catalog…) belongs to one person per browser. If someone else
+    // signed in here before, theirs is set aside and this person's is loaded (store.js).
+    if (!hub.persistence.adoptUser(session.email)) {
+      signOut("Another person's unsaved data is stored in this browser and couldn't be set aside (storage is full). Free some space or use another browser.");
+      return;
+    }
+    setAppInert(false);
     window.dispatchEvent(new CustomEvent("saleshub:signedin", { detail: hub.auth }));
   }
 

@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const hub = window.SalesHub;
   const state = hub.state;
-  const { money, esc } = hub;
+  const { money, esc, calc } = hub;
 
   const STATUSES = {
     draft: "Draft",
@@ -16,12 +16,7 @@
   };
   const OPEN_STATUSES = ["draft", "sent", "negotiating"];
 
-  const FREQS = {
-    once: { label: "One-time", mult: 1, recurring: false },
-    month: { label: "Monthly", mult: 12, recurring: true },
-    quarter: { label: "Quarterly", mult: 4, recurring: true },
-    year: { label: "Annually", mult: 1, recurring: true },
-  };
+  const FREQS = calc.FREQS;
 
   const LINE_TYPES = {
     janitorial: "Janitorial & facility",
@@ -59,61 +54,16 @@
 
   // --- Math -----------------------------------------------------------------
 
-  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  const hasValue = (v) => v !== "" && v !== undefined && v !== null;
+  // All arithmetic lives in calc.js (shared with the order tab and unit-tested).
+  const { num, hasValue, lineMargin } = calc;
+  const totals = calc.quoteTotals;
   const pct = (n) => `${n.toFixed(1)}%`;
   const DEFAULT_TARGET_MARGIN = 30;
   const targetMarginPct = () => num((state.settings || {}).targetMargin ?? DEFAULT_TARGET_MARGIN);
+  const MARGIN_RULE = "Margin must be at least 0% and below 100%.";
 
-  // Line cost and margin are internal: shown to the rep in the editor, list and
-  // exports, never on the printed proposal (see proposalHtml).
-  function lineMargin(l, disc) {
-    const sell = num(l.unitPrice) * disc;
-    return hasValue(l.cost) && sell > 0 ? ((sell - num(l.cost)) / sell) * 100 : null;
-  }
-
-  function totals(q) {
-    const disc = Math.min(100, Math.max(0, num(q.discountPct))) / 100;
-    let subtotal = 0, taxableNet = 0, recurring = 0, oneTime = 0, savings = 0, currentSpend = 0;
-    let costedRevenue = 0, costTotal = 0, annualProfit = 0, missingCost = 0;
-    for (const l of q.lines) {
-      const ext = num(l.qty) * num(l.unitPrice);
-      const net = ext * (1 - disc);
-      const f = FREQS[l.freq] || FREQS.once;
-      subtotal += ext;
-      if (l.taxable) taxableNet += net;
-      if (f.recurring) recurring += net * f.mult;
-      else oneTime += net;
-      if (l.currentPrice !== "" && l.currentPrice !== undefined && l.currentPrice !== null) {
-        const current = num(l.qty) * num(l.currentPrice) * f.mult;
-        currentSpend += current;
-        savings += current - net * f.mult;
-      }
-      if (hasValue(l.cost)) {
-        const cost = num(l.qty) * num(l.cost);
-        costedRevenue += net;
-        costTotal += cost;
-        annualProfit += (net - cost) * f.mult;
-      } else if (ext > 0) {
-        missingCost++;
-      }
-    }
-    // Margin covers line revenue after discount; tax and delivery are excluded.
-    const grossProfit = costedRevenue - costTotal;
-    const discount = subtotal * disc;
-    const tax = q.taxExempt ? 0 : (taxableNet * num(q.taxRate)) / 100;
-    const orderTotal = subtotal - discount + tax + num(q.delivery);
-    return {
-      subtotal, discount, tax, orderTotal, recurring, oneTime,
-      firstYear: recurring + oneTime,
-      savings, currentSpend,
-      savingsPct: currentSpend > 0 ? (savings / currentSpend) * 100 : null,
-      costedRevenue, costTotal, grossProfit, annualProfit, missingCost,
-      marginPct: costedRevenue > 0 ? (grossProfit / costedRevenue) * 100 : null,
-    };
-  }
-
-  const validUntil = (q) => hub.addDays((q.sentDate || q.created || hub.today()).slice(0, 10), q.validDays || 30);
+  // Validity counts from the day it was sent (or created), on the rep's local calendar.
+  const validUntil = (q) => hub.addDays(calc.toLocalDate(q.sentDate || q.created) || hub.today(), q.validDays || 30);
   const isExpired = (q) => ["sent", "negotiating"].includes(q.status) && hub.today() > validUntil(q);
 
   // --- Customers (leads + accounts) ------------------------------------------
@@ -198,7 +148,7 @@
     // When both sides know uses-per-case, compare cost-per-use scaled to our case
     // size; otherwise it's a case-for-case substitution.
     let current = c.competitor_price ?? "";
-    if (c.competitor_cost_per_use && item.uses_per_case) current = +(c.competitor_cost_per_use * item.uses_per_case).toFixed(2);
+    if (c.competitor_cost_per_use && item.uses_per_case) current = calc.round2(c.competitor_cost_per_use * item.uses_per_case);
     const known = hub.catalog.bySku(item.sku);
     return {
       category: known ? known.cat : hub.catalog.categorize(c.matched_category, item.name),
@@ -359,7 +309,7 @@
     for (const q of filteredQuotes()) {
       const t = totals(q);
       for (const l of q.lines.length ? q.lines : [{}]) {
-        rows.push([q.number, q.company, STATUSES[q.status], isExpired(q) ? "yes" : "", q.created.slice(0, 10),
+        rows.push([q.number, q.company, STATUSES[q.status], isExpired(q) ? "yes" : "", calc.toLocalDate(q.created),
           q.sentDate || "", q.decidedDate || "", l.sku, l.name, LINE_TYPES[l.type] || "", l.tier, l.qty, l.uom,
           FREQS[l.freq] ? FREQS[l.freq].label : "", l.unitPrice, l.currentPrice, l.cost ?? "",
           l.unitPrice !== undefined && lineMargin(l, 1 - num(q.discountPct) / 100) !== null
@@ -368,7 +318,7 @@
           t.marginPct === null ? "" : t.marginPct.toFixed(1), t.grossProfit.toFixed(2), q.lossReason]);
       }
     }
-    hub.downloadCsv(`quotes-${hub.today()}.csv`,
+    hub.downloadCsv(`quotes-INTERNAL-costs-and-margins-${hub.today()}.csv`,
       ["quote", "company", "status", "expired", "created", "sent", "decided", "sku", "description", "product_line",
         "tier", "qty", "uom", "frequency", "unit_price", "current_price", "unit_cost", "line_margin_pct",
         "order_total", "annual_recurring", "one_time", "annual_savings", "quote_margin_pct", "gross_profit_per_order",
@@ -435,9 +385,13 @@
   // the six-way catalog category for display.
   const CAT_TO_TYPE = { janitorial: "janitorial", breakroom: "janitorial", furniture: "furniture", promo: "apparel", office: "other", printing: "other", other: "other" };
   const CAT_FREQ = { furniture: "once", promo: "once" }; // everything else restocks monthly
-  // Rounded up to the cent so the price never lands below the chosen margin.
-  const priceFor = (cost, m) => Math.ceil((num(cost) / (1 - Math.min(99.9, Math.max(0, num(m))) / 100)) * 100 - 1e-9) / 100;
-  const marginOf = (cost, sell) => (num(sell) > 0 ? ((num(sell) - num(cost)) / num(sell)) * 100 : null);
+  // Rounded up to the cent so the price never lands below the chosen margin; null if the cost or margin is unusable.
+  const priceFor = calc.priceFor;
+  const marginOf = calc.marginOf;
+  const priceText = (cost, m) => {
+    const p = priceFor(cost, m);
+    return p === null ? "—" : money(p);
+  };
   const quoteMargin = () => num(draft && hasValue(draft.defaultMargin) ? draft.defaultMargin : targetMarginPct());
   const catLabel = (k) => (hub.catalog.CATEGORIES[k] || "");
   const discFactor = () => 1 - Math.min(100, Math.max(0, num(draft.discountPct))) / 100;
@@ -631,7 +585,12 @@
   // re-prices every line that has a cost.
   $("qe-default-margin").addEventListener("input", (e) => {
     if (!draft || e.target.value.trim() === "") return;
-    draft.defaultMargin = Math.min(99.9, Math.max(0, num(e.target.value)));
+    if (!calc.validMargin(e.target.value)) {
+      $("qe-status").textContent = MARGIN_RULE; // refused, not silently clamped
+      return;
+    }
+    draft.defaultMargin = Number(e.target.value);
+    $("qe-status").textContent = "";
     markDirty();
   });
   $("qe-apply-margin").addEventListener("click", () => {
@@ -642,10 +601,13 @@
       return;
     }
     if (!confirm(`Re-price ${costed.length} line item${costed.length === 1 ? "" : "s"} to a ${pct(m)} margin? Prices you set by hand will be replaced.`)) return;
-    for (const l of costed) l.unitPrice = priceFor(l.cost, m);
+    const priced = costed.filter((l) => priceFor(l.cost, m) !== null);
+    for (const l of priced) l.unitPrice = priceFor(l.cost, m);
     markDirty();
     renderLines();
-    $("qe-status").textContent = `Re-priced ${costed.length} line item${costed.length === 1 ? "" : "s"} to ${pct(m)} margin. Unsaved changes.`;
+    $("qe-status").textContent = priced.length === costed.length
+      ? `Re-priced ${costed.length} line item${costed.length === 1 ? "" : "s"} to ${pct(m)} margin. Unsaved changes.`
+      : `Re-priced ${priced.length} of ${costed.length} lines; the rest have a cost that can't be priced. Unsaved changes.`;
   });
 
   for (const tier of ["good", "better", "best"]) {
@@ -728,7 +690,7 @@
       left.append(el("strong", "", it.name),
         el("span", "lineup-meta", [it.sku, catLabel(it.cat), it.uom, it.pack].filter(Boolean).join(" · ")));
       const right = el("span", "ip-item-cost");
-      right.append(el("strong", "", money(it.cost)), el("span", "lineup-meta", `cost 🔒 → ${money(priceFor(it.cost, quoteMargin()))} at ${pct(quoteMargin())}`));
+      right.append(el("strong", "", money(it.cost)), el("span", "lineup-meta", `cost 🔒 → ${priceText(it.cost, quoteMargin())} at ${pct(quoteMargin())}`));
       b.append(left, right, el("span", "ip-plus", "+"));
       b._item = it;
       li.append(b);
@@ -752,7 +714,7 @@
     } else if (src.item) {
       const it = src.item;
       const m = quoteMargin();
-      v = { name: it.name, sku: it.sku, cost: it.cost, margin: m, sell: priceFor(it.cost, m), qty: keep ? keep.qty : 1, uom: it.uom || "each",
+      v = { name: it.name, sku: it.sku, cost: it.cost, margin: m, sell: priceFor(it.cost, m) ?? "", qty: keep ? keep.qty : 1, uom: it.uom || "each",
         freq: keep ? keep.freq : CAT_FREQ[it.cat] || "month", current: keep ? keep.currentPrice : "", taxable: keep ? keep.taxable : true, category: it.cat };
     } else {
       v = { name: "", sku: "", cost: "", margin: quoteMargin(), sell: "", qty: keep ? keep.qty : 1, uom: "each", freq: "month", current: "", taxable: true, category: "other" };
@@ -800,10 +762,17 @@
   }
 
   // Margin and sell price drive each other; cost re-prices at the current margin.
-  ipInputs["ip-margin"].addEventListener("input", () => {
+  function repriceFromMargin() {
     const cost = val("ip-cost");
     const m = val("ip-margin");
-    if (cost !== null && m !== null) ipInputs["ip-sell"].value = priceFor(cost, m).toFixed(2);
+    if (cost === null || m === null) return;
+    const p = priceFor(cost, m);
+    // An impossible margin (100% or more) or cost is refused with a reason, never turned into a price.
+    $("ip-error").textContent = p === null ? (calc.validMargin(m) ? "Cost must be zero or more." : MARGIN_RULE) : "";
+    if (p !== null) ipInputs["ip-sell"].value = p.toFixed(2);
+  }
+  ipInputs["ip-margin"].addEventListener("input", () => {
+    repriceFromMargin();
     renderPriceResults();
   });
   ipInputs["ip-sell"].addEventListener("input", () => {
@@ -813,9 +782,7 @@
     renderPriceResults();
   });
   ipInputs["ip-cost"].addEventListener("input", () => {
-    const cost = val("ip-cost");
-    const m = val("ip-margin");
-    if (cost !== null && m !== null) ipInputs["ip-sell"].value = priceFor(cost, m).toFixed(2);
+    repriceFromMargin();
     renderPriceResults();
   });
   for (const id of ["ip-qty"]) ipInputs[id].addEventListener("input", renderPriceResults);
@@ -1022,21 +989,26 @@
   const mQty = $("m-qty");
 
   const parseNum = (el) => (el.value.trim() === "" ? null : Number(el.value));
-  const clampTarget = (t) => Math.min(99.9, Math.max(0, t));
   function targetMargin() {
     const t = parseNum(mTarget);
-    return t === null || !Number.isFinite(t) ? null : clampTarget(t);
+    return t === null || !calc.validMargin(t) ? null : t;
   }
 
   function priceAtTarget() {
     const cost = parseNum(mCost);
     const t = targetMargin();
-    if (cost === null || !(cost >= 0) || t === null) {
+    if (parseNum(mTarget) !== null && t === null) {
+      mSell.value = "";
+      $("m-sell-hint").textContent = MARGIN_RULE;
+      return;
+    }
+    const price = cost === null || t === null ? null : priceFor(cost, t);
+    if (price === null) {
       mSell.value = "";
       return;
     }
-    // Round up to the cent so the price never lands below the target margin.
-    mSell.value = (Math.ceil((cost / (1 - t / 100)) * 100 - 1e-9) / 100).toFixed(2);
+    // Rounded up to the cent so the price never lands below the target margin.
+    mSell.value = price.toFixed(2);
     $("m-sell-hint").textContent = `Priced at your ${pct(t)} target`;
   }
 
@@ -1172,7 +1144,10 @@
     document.body.classList.add("print-proposal");
     window.print();
   });
-  window.addEventListener("afterprint", () => document.body.classList.remove("print-proposal"));
+  window.addEventListener("afterprint", () => {
+    document.body.classList.remove("print-proposal");
+    $("proposal-print").innerHTML = ""; // don't leave the rendered proposal sitting in the page
+  });
 
   // --- Entry points used by other tabs ----------------------------------------
 
@@ -1187,6 +1162,7 @@
     totals,
     STATUSES,
     isExpired,
+    validUntil,
     open: openQuote,
     newForLead(leadId) {
       const lead = findLead(leadId);

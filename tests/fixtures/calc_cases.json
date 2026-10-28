@@ -1,0 +1,30 @@
+{
+  "_about": "Worked examples run against BOTH frontend/calc.js (node --test) and pricing.py/accounts_store.py (pytest). Expected values were computed by hand.",
+  "price_for_margin": [
+    {"cost": 60, "margin": 25, "expect": 80.00, "note": "25% margin, not 25% markup ($75)"},
+    {"cost": 10, "margin": 30, "expect": 14.29, "note": "14.2857 rounds UP to the cent"},
+    {"cost": 0.1, "margin": 0, "expect": 0.10},
+    {"cost": 19.99, "margin": 42.5, "expect": 34.77},
+    {"cost": 3.33, "margin": 12.5, "expect": 3.81},
+    {"cost": 1000, "margin": 99.9, "expect": 1000000.00},
+    {"cost": 0, "margin": 40, "expect": 0.00}
+  ],
+  "price_for_margin_invalid": [
+    {"cost": 10, "margin": 100}, {"cost": 10, "margin": 150}, {"cost": 10, "margin": -1},
+    {"cost": 10, "margin": "abc"}, {"cost": 10, "margin": null}, {"cost": -1, "margin": 20}, {"cost": null, "margin": 20}
+  ],
+  "cost_per_use": [
+    {"price": 48, "uses": 4000, "expect": 0.012},
+    {"price": 30, "uses": 12, "expect": 2.5},
+    {"price": 1, "uses": 3, "expect": 0.333333}
+  ],
+  "cost_per_use_unsupported": [
+    {"price": 10, "uses": 0}, {"price": 10, "uses": -5}, {"price": 10, "uses": null}, {"price": null, "uses": 10}, {"price": -1, "uses": 10}
+  ],
+  "order_merchandise": [
+    {"lines": [{"qty": 10, "shipped": 4, "unitPrice": 2.5}], "expect": 10.00, "note": "shipped quantity, not ordered"},
+    {"lines": [{"qty": 3, "unitPrice": 1.005}], "expect": 3.02, "note": "blank shipped = ordered; 3.015 rounds half up"},
+    {"lines": [{"qty": 2, "shipped": "", "unitPrice": 19.99}, {"qty": 1, "shipped": 0, "unitPrice": 500}], "expect": 39.98, "note": "fully back-ordered line bills nothing"},
+    {"lines": [{"qty": 7, "shipped": 7, "unitPrice": 0.333}, {"qty": 7, "shipped": 7, "unitPrice": 0.333}], "expect": 4.66, "note": "each line rounds to cents (2.331 -> 2.33) before summing"}
+  ]
+}

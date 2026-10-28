@@ -9,7 +9,8 @@
 
   const MAX_ITEMS = 6;
   const STALE_DAYS = 60;
-  const daysBetween = (a, b) => Math.round((new Date(`${b}T12:00:00`) - new Date(`${a.slice(0, 10)}T12:00:00`)) / 86400000);
+  // Whole calendar days from a to b on the rep's local calendar (a may be a stored timestamp).
+  const daysBetween = (a, b) => Math.round((new Date(`${hub.calc.toLocalDate(b)}T12:00:00`) - new Date(`${hub.calc.toLocalDate(a)}T12:00:00`)) / 86400000);
   const ago = (iso) => {
     const d = daysBetween(iso, hub.today());
     return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`;
@@ -124,7 +125,7 @@
         const t = hub.quotes.totals(q);
         const expired = hub.quotes.isExpired(q);
         const sentDays = q.sentDate ? daysBetween(q.sentDate, today) : 0;
-        const until = hub.addDays((q.sentDate || q.created).slice(0, 10), q.validDays || 30);
+        const until = hub.quotes.validUntil(q);
         const expiring = !expired && until <= week;
         const kind = q.accountId ? "account" : "lead";
         const id = q.accountId || q.leadId;

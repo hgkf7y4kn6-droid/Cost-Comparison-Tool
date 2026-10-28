@@ -83,7 +83,7 @@ The stages themselves, one tab each:
      Furniture) in one list (pick any number) beside an item search. Choosing
      an item pulls its cost from the **item catalog**; set the margin % or the
      sell price and the other updates (price = cost ÷ (1 − margin), rounded up
-     to the cent). **Save line item** returns to the lineup; **Save & next line
+     to the cent; a margin of 100% or more, or a missing cost, is refused). **Save line item** returns to the lineup; **Save & next line
      item** opens the next slot. "Margin for every item" sets the starting
      margin for new items (defaults to your saved target), and **Apply to all
      line items** re-prices every line with a cost. Items not in the catalog
@@ -97,7 +97,7 @@ The stages themselves, one tab each:
      into the six categories from the file's category or the item name;
      re-imports merge by SKU and update costs. "Load sample items" adds a
      made-up catalog (SKUs `SAMPLE-…`) for trying the builder. The catalog is
-     stored in this browser.
+     stored in this browser (use Backup to keep a copy).
    - Discount, delivery, and sales tax defaulted from the customer's location
      (Philadelphia 8%, rest of PA 6%, NJ 6.625%; apparel lines default to
      non-taxable; tax-exempt toggle). Confirm rates per deal.
@@ -118,7 +118,8 @@ The stages themselves, one tab each:
      blended margin on open and won quotes.
    - **Margin calculator** card: set a target margin % (remembered between
      sessions), enter a cost and the sell price fills in at that target
-     (cost ÷ (1 − margin), rounded up to the cent). Type your own sell price to
+     (cost ÷ (1 − margin), rounded up to the cent; a margin of 100% or more is
+     refused with a message). Type your own sell price to
      see the margin, profit per unit / total, markup, and how far it is from
      target.
 4. **Accounts** (`frontend/accounts.js`) — customers from won quotes (or added
@@ -142,21 +143,34 @@ The stages themselves, one tab each:
    order carry a red **Back order** badge on the order and on the account.
    Orders come from **+ Add order** or **Import orders** (a CSV/Excel invoice
    export, one row per line, matched to accounts by Customer # or name;
-   re-importing an invoice replaces it). YTD/MTD count shipped quantity ×
-   unit price, before tax and freight — the server uses the same rule for the
+   re-importing an invoice updates it). An import is **reviewed before anything
+   changes**: new orders, invoices that would be replaced (old versus new lines
+   and totals; a file with fewer lines or a lower total is flagged as a possible
+   partial export and left unticked), rows with impossible dates and unmatched
+   customers. The replaced version is kept on the account and the import can be
+   undone. YTD/MTD count shipped quantity × unit price per line rounded to the
+   cent, before tax and freight — the server uses the same rule for the
    YTD spend other reps see. Account margin comes from this year's invoice
    lines that have a cost, or the won proposal until there are any.
 
-All Sales Hub data (leads, quotes, accounts) is stored in the browser's
-`localStorage` via `frontend/store.js` — per browser, per device. Use each
-tab's **Export shown (CSV)** to back up or share; moving this data to a
-backend database is the next step for team-wide use.
+**Where your data lives** (details in [docs/OPERATIONS.md](docs/OPERATIONS.md)):
+leads and accounts are saved in the browser *and* on the server (so they follow
+you across devices); proposals are saved in the browser and, once you choose
+**Save my proposals to the server** on the Proposals tab, on the server too
+(private to you); the item catalog, your profile and settings are saved in the
+browser only. The **Backup** link in the top bar downloads and restores everything
+that is browser-only, sets aside data it can't read instead of overwriting it, and
+keeps edits that lost a conflict. The CSV exports are for reporting, not backup;
+the quotes export is labelled INTERNAL because it contains costs and margins.
 
 ## Sign-in (required)
 Every backend endpoint except `/health` and `/auth/login` requires a signed-in
 user, including report downloads under `/reports/`. The frontend shows a sign-in
-screen and sends the token with each request. Leads, quotes and accounts still
-live in each browser's local storage; signing out doesn't erase them.
+screen and sends the token with each request. Signing in
+does not by itself move business records to the server (see "Where your data
+lives" above), and signing out doesn't erase the browser's local data; if someone
+else signs in on the same browser, the first person's local data is set aside and
+returns when they sign in again.
 
 Set up users on Render (Environment tab of `cost-comparison-backend`):
 1. For each person, run `python auth.py hash-password` locally (asks for their
@@ -197,7 +211,10 @@ The Prospecting tab opens with a **service region map** (Google Maps):
   "Make me the owner".
 - Only a record's owner or a manager can delete it. Managers are listed in
   `AUTH_MANAGERS` (comma-separated emails) and can reassign any record.
-- Quotes and the item catalog still live in each rep's browser.
+- Quotes live in each rep's browser unless the rep opts in to saving them to the
+  server, where they are private to the rep. The item catalog stays in the browser.
+- Two people editing the same record: the second save is refused (not silently
+  overwriting), the latest version is loaded, and the refused edit is kept in Backup.
 
 Setup:
 1. **Google Maps key.** In Google Cloud, enable the *Maps JavaScript API*,
@@ -216,8 +233,16 @@ Google Maps Platform terms before relying on stored copies long-term.
 
 ## Project layout
 - `auth.py` — sign-in: password hashing, signed session tokens, lockout.
-- `accounts_store.py` — shared accounts and who may see/edit them.
+- `accounts_store.py` — shared leads, accounts and (opt-in) proposals: who may see/edit
+  them, revisions and conflict detection, audit log, backups, export/restore.
+- `pricing.py` — Decimal money rules (sell price from margin, cost per use, savings).
+- `hardening.py` — upload/size/signature checks, bounded heavy work, response headers.
 - `table_extract.py` — Excel/PDF → rows for lead import.
+- `frontend/calc.js` — the same money rules for the browser (quotes, invoices, dates, CSV safety).
+- `frontend/store.js`, `frontend/backup.js` — local storage with corruption/quota/version
+  protection, per-person data on a shared browser, and the Backup & restore dialog.
+- `tests/` — pytest (backend), `node --test` (browser maths), Playwright (end-to-end).
+- `docs/OPERATIONS.md` — storage, backup/restore, security model, KPI definitions, launch checklist.
 - `backend.py` — FastAPI backend (CLIP + FAISS matching, OCR, report generation).
   Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`).
 - `frontend/` — static HTML/JS frontend. Deployed to **Cloudflare** as static
@@ -242,6 +267,17 @@ Google Maps Platform terms before relying on stored copies long-term.
    `wrangler.jsonc` matches your Cloudflare Worker's name.
 3. Optionally lock CORS down: in Render set `ALLOWED_ORIGINS` to your Cloudflare
    URL (comma-separate multiple origins) instead of `*`.
+
+## Tests
+```
+pip install -r requirements.txt -r requirements-dev.txt   # or just pytest httpx for the backend tests
+python -m pytest -q                      # backend: auth, authorization, uploads, pricing, reports, records
+node --test "tests/js/*.test.js"         # browser money/date/CSV rules, shared fixtures with the backend
+tests/e2e/run.sh                         # browser flow on a throwaway server (needs playwright)
+```
+The model libraries (PyTorch, FAISS, CLIP) are replaced by small deterministic stand-ins in
+`tests/conftest.py`, so matching *quality* is not tested — only the code around it.
+Set `AXE_PATH=…/axe.min.js` (npm `axe-core`) to add an automated WCAG A/AA scan to the browser flow.
 
 ## Run locally
 ```
@@ -328,9 +364,10 @@ pairing (competitor product embedding -> confirmed SKUs) is stored, and the
 directly instead of recomputing from scratch. `GET /feedback/list/` shows
 everything learned so far.
 
-**Current limitation:** confirmed feedback is stored as JSON on local disk
-(`$DATA_DIR/ob_reports/feedback_store.json`, the Render persistent disk in
-production) and pending (unconfirmed) comparisons
+**Current limitation:** the uploaded catalog and confirmed feedback are stored as JSON on local disk
+(`$DATA_DIR/ob_reports/catalog_store.json` and `feedback_store.json`, the Render
+persistent disk in production; both are written atomically, and a file that can't be
+read is moved aside rather than overwritten) and pending (unconfirmed) comparisons
 live in memory only — restarting the backend clears anything not yet
 confirmed. For production use, swap this for a real database (e.g. Postgres
 with pgvector) so the learned mappings and pending comparisons survive

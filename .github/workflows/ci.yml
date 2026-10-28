@@ -1,0 +1,27 @@
+name: tests
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-and-browser-maths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The model libraries are stubbed in tests/conftest.py, so the heavy requirements aren't needed.
+      - run: pip install fastapi uvicorn python-multipart pydantic numpy pandas openpyxl xlrd pdfplumber python-docx "Pillow>=13.0.0" pytest httpx ruff
+      - run: ruff check --select E9,F backend.py auth.py accounts_store.py hardening.py pricing.py table_extract.py tests
+      - run: python -m pytest -q
+      - run: node --test "tests/js/*.test.js"
+      - run: npx --yes eslint@9 -c eslint.config.js "frontend/*.js" "tests/js/*.js" "tests/e2e/*.js"
+      - name: Browser flow (Playwright + a throwaway server)
+        run: |
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+          tests/e2e/run.sh

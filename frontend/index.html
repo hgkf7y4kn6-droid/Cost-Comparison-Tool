@@ -25,6 +25,7 @@
       </nav>
       <div id="auth-bar" class="auth-bar" hidden>
         <strong id="auth-user"></strong>
+        <button type="button" class="link-btn" id="backup-open" title="Back up or restore the data stored in this browser">Backup</button>
         <button type="button" class="link-btn" id="auth-signout">Sign out</button>
       </div>
     </div>
@@ -48,6 +49,8 @@
       </span>
     </div>
   </div>
+
+  <div id="storage-notice" class="storage-notice" role="alert" hidden></div>
 
   <main>
   <!-- ===================== TODAY TAB ===================== -->
@@ -170,7 +173,7 @@
       <div class="xcard-body">
       <p class="hint">Columns are recognized automatically; PDFs can be tables or directory listings. Template: <a href="prospects_template.csv" download>prospects_template.csv</a>.</p>
       <form id="lead-import-form">
-        <input type="file" id="lead-file" accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
+        <input type="file" id="lead-file" aria-label="Lead list file (CSV, Excel or PDF)" accept=".csv,.xlsx,.xls,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
         <input type="text" id="lead-source" placeholder="Source label (e.g. PA DOS registry, OpenDataPhilly, Lancaster Chamber)">
         <label class="check"><input type="checkbox" id="skip-out-of-territory" checked> Drop rows outside Philadelphia / NJ / Lehigh Valley / Lancaster</label>
         <label class="check"><input type="checkbox" id="skip-headcount"> Drop rows whose known headcount is outside 20–500</label>
@@ -354,7 +357,7 @@
       </div>
       <div class="xcard-body">
       <form id="catalog-form">
-        <input type="file" id="catalog-file" accept=".xlsx,.xls,.csv" required>
+        <input type="file" id="catalog-file" aria-label="Office Basics catalog file" accept=".xlsx,.xls,.csv" required>
         <button type="submit" class="btn blue">Load Catalog</button>
       </form>
       <p id="catalog-status" class="status ok" aria-live="polite"></p>
@@ -369,7 +372,7 @@
       </div>
       <div class="xcard-body">
       <form id="compare-form">
-        <input type="file" id="compare-file" accept=".png,.jpg,.jpeg,.webp,.pdf,.xlsx,.xls" required>
+        <input type="file" id="compare-file" aria-label="Competitor product file (photo, PDF or Excel)" accept=".png,.jpg,.jpeg,.webp,.pdf,.xlsx,.xls" required>
         <input type="number" id="competitor-uses" min="0" step="any"
                placeholder="Competitor uses per case (optional, enables cost-per-use)">
         <button type="submit" class="btn green">Run Cost Comparison</button>
@@ -451,6 +454,7 @@
     <h2 class="panel-title">Proposals &amp; Quotes</h2>
 
     <div class="kpis" id="q-kpis" aria-live="polite"></div>
+    <p id="q-sync-note" class="hint sync-note"></p>
 
     <section class="xcard" data-card="quotes-list">
       <div class="xcard-head">
@@ -488,7 +492,7 @@
         <div class="count-chips" id="cat-counts"></div>
         <p id="cat-empty" class="hint">Import your cost file (CSV or Excel) with at least an item name/description and a cost column. SKU, category, list price, unit and pack are used when present; each item is filed under Janitorial Supplies, Breakroom Supplies, Office Supplies, Printing Solutions, Print and Promotional, or Furniture from its category or name. See <a href="catalog_items_template.csv" download>catalog_items_template.csv</a>.</p>
         <form id="cat-form" class="cat-form">
-          <input type="file" id="cat-file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
+          <input type="file" id="cat-file" aria-label="Item cost file (CSV or Excel)" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
           <label class="check"><input type="checkbox" id="cat-replace"> Replace the whole catalog (otherwise items merge by SKU and costs update)</label>
           <div class="row-buttons">
             <button type="submit" class="btn small primary">Import items</button>
@@ -870,6 +874,20 @@
     </div>
   </div>
 
+  <div id="backup-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="backup-title">
+      <div class="picker-header">
+        <button type="button" class="link-btn picker-back" id="backup-close">‹ Close</button>
+        <div class="picker-heading"><strong id="backup-title" class="picker-title">Backup &amp; restore</strong><small class="muted">Data stored in this browser</small></div>
+        <span class="picker-back" aria-hidden="true"></span>
+      </div>
+      <div class="modal-body">
+        <p id="backup-msg" class="status" role="status" aria-live="polite"></p>
+        <div id="backup-body"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
 
   <!-- Filled in and shown only when printing a proposal -->
@@ -889,6 +907,7 @@
   </div>
 
   <script src="config.js"></script>
+  <script src="calc.js"></script>
   <script src="store.js"></script>
   <script src="cards.js"></script>
   <script src="auth.js"></script>
@@ -900,6 +919,7 @@
   <script src="orders.js"></script>
   <script src="accounts.js"></script>
   <script src="sync.js"></script>
+  <script src="backup.js"></script>
   <script src="deal.js"></script>
   <script src="today.js"></script>
   <script src="map.js"></script>

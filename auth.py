@@ -124,8 +124,15 @@ class Authenticator:
             body = json.loads(_unb64(payload))
         except ValueError:
             return None
-        stored = self.users.get(body.get("sub", ""))
-        if not stored or body.get("fp") != _fingerprint(stored) or body.get("exp", 0) < now:
+        # A validly signed token always has this shape; anything else is rejected
+        # rather than allowed to raise (and surface as a 500).
+        if not isinstance(body, dict) or not isinstance(body.get("sub"), str):
+            return None
+        exp = body.get("exp")
+        if isinstance(exp, bool) or not isinstance(exp, (int, float)) or exp < now:
+            return None
+        stored = self.users.get(body["sub"])
+        if not stored or body.get("fp") != _fingerprint(stored):
             return None
         return body
 
@@ -163,9 +170,21 @@ def from_environment() -> Authenticator:
         # Works, but every restart/redeploy signs everyone out. Set AUTH_SECRET.
         print("WARNING: AUTH_SECRET is not set; using a random secret for this process.", file=sys.stderr)
         secret = secrets.token_hex(32)
-    users = load_users()
+    elif len(secret) < 32:
+        print("WARNING: AUTH_SECRET is shorter than 32 characters; use a long random value.", file=sys.stderr)
+    raw = os.environ.get("AUTH_USERS", "")
+    users = load_users(raw)
     if not users:
         print("WARNING: AUTH_USERS is not set; all API requests will be refused until it is.", file=sys.stderr)
+    else:
+        # Names the entries that were ignored (never prints a hash) so a typo isn't a silent lockout.
+        entries = [e.strip() for e in raw.split(",") if e.strip()]
+        for entry in entries:
+            email, sep, stored = entry.partition(":")
+            if not (sep and email.strip() and stored.strip()):
+                print(f"WARNING: ignoring malformed AUTH_USERS entry for {email.strip() or '(blank)'!r}.", file=sys.stderr)
+            elif not stored.strip().startswith("pbkdf2_sha256$"):
+                print(f"WARNING: AUTH_USERS entry for {email.strip()!r} isn't a pbkdf2_sha256 hash; that user cannot sign in.", file=sys.stderr)
     managers = set(os.environ.get("AUTH_MANAGERS", "").lower().split(","))
     return Authenticator(users, secret, managers)
 
