@@ -255,7 +255,7 @@ const tab = async (page, name) => { await page.click(`[data-tab=${name}]`); awai
       assert.equal(after.leads.length, before.leads.length);
       // a bad file is rejected without changes
       await page.setInputFiles("#backup-body input[type=file]", write("junk.json", '{"app":"something-else"}'));
-      await page.waitForFunction(() => document.getElementById("backup-body").textContent.includes("isn't a Sales Hub backup"));
+      await page.waitForFunction(() => document.getElementById("backup-body").textContent.includes("isn't a VectorSales backup"));
       await page.setInputFiles("#backup-body input[type=file]", write("junk2.json", "not json at all"));
       await page.waitForFunction(() => document.getElementById("backup-body").textContent.includes("isn't valid JSON"));
       await page.click("#backup-close");

@@ -71,10 +71,10 @@
   function validateBackup(obj) {
     const errors = [];
     if (!obj || typeof obj !== "object" || Array.isArray(obj) || obj.app !== FORMAT) {
-      return { ok: false, errors: ["This isn't a Sales Hub backup file."] };
+      return { ok: false, errors: ["This isn't a VectorSales backup file."] };
     }
     if (!Number.isInteger(obj.schemaVersion) || obj.schemaVersion < 1) errors.push("The backup has no valid version number.");
-    else if (obj.schemaVersion > P.SCHEMA_VERSION) errors.push("This backup was made by a newer version of Sales Hub. Refresh the page to update, then try again.");
+    else if (obj.schemaVersion > P.SCHEMA_VERSION) errors.push("This backup was made by a newer version of VectorSales. Refresh the page to update, then try again.");
     const data = obj.data;
     if (!data || typeof data !== "object") return { ok: false, errors: [...errors, "The backup has no data section."] };
     const clean = {};
@@ -200,7 +200,7 @@
     const dlBtn = el("button", "btn small primary", "Download backup (.json)");
     dlBtn.type = "button";
     dlBtn.addEventListener("click", () => {
-      hub.downloadBlob(`sales-hub-backup-${hub.today()}.json`, new Blob([JSON.stringify(buildBackup(), null, 2)], { type: "application/json" }));
+      hub.downloadBlob(`vectorsales-backup-${hub.today()}.json`, new Blob([JSON.stringify(buildBackup(), null, 2)], { type: "application/json" }));
       $("backup-msg").textContent = "Backup downloaded.";
     });
     dl.append(dlBtn);
@@ -223,7 +223,7 @@
       pending = null;
       const f = file.files[0];
       if (!f) return;
-      if (f.size > MAX_BACKUP_BYTES) return preview.append(el("p", "status err", "That file is too large to be a Sales Hub backup."));
+      if (f.size > MAX_BACKUP_BYTES) return preview.append(el("p", "status err", "That file is too large to be a VectorSales backup."));
       let obj;
       try {
         obj = JSON.parse(await f.text());
@@ -285,7 +285,7 @@
         const when = new Date(Number(key.slice(P.CORRUPT_PREFIX.length)));
         const b = el("button", "btn small", `Download copy from ${Number.isNaN(when.getTime()) ? key : when.toLocaleString()}`);
         b.type = "button";
-        b.addEventListener("click", () => hub.downloadBlob(`sales-hub-unreadable-${key.slice(P.CORRUPT_PREFIX.length)}.txt`, new Blob([P.storage.get(key) || ""], { type: "text/plain" })));
+        b.addEventListener("click", () => hub.downloadBlob(`vectorsales-unreadable-${key.slice(P.CORRUPT_PREFIX.length)}.txt`, new Blob([P.storage.get(key) || ""], { type: "text/plain" })));
         c.append(b);
       }
       body.append(c);
@@ -302,7 +302,7 @@
         try {
           const res = await hub.api.fetch("/records/export");
           if (!res.ok) throw new Error(`The server said ${res.status}.`);
-          hub.downloadBlob(`sales-hub-server-export-${hub.today()}.json`, await res.blob());
+          hub.downloadBlob(`vectorsales-server-export-${hub.today()}.json`, await res.blob());
           $("backup-msg").textContent = "Server export downloaded.";
         } catch (err) {
           $("backup-msg").className = "status err";
@@ -320,7 +320,7 @@
       c.append(el("p", "hint", `${conflicts.length} edit${conflicts.length === 1 ? " was" : "s were"} not saved because someone else changed the same record first. Your version is kept here so nothing is lost; copy anything you still need into the record.`));
       const b = el("button", "btn small", "Download these edits (.json)");
       b.type = "button";
-      b.addEventListener("click", () => hub.downloadBlob(`sales-hub-replaced-edits-${hub.today()}.json`, new Blob([JSON.stringify(conflicts, null, 2)], { type: "application/json" })));
+      b.addEventListener("click", () => hub.downloadBlob(`vectorsales-replaced-edits-${hub.today()}.json`, new Blob([JSON.stringify(conflicts, null, 2)], { type: "application/json" })));
       const clear = el("button", "btn small", "Clear this list");
       clear.type = "button";
       clear.addEventListener("click", () => {

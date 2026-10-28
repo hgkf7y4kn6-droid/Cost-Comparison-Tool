@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased — launch-readiness pass
+## Unreleased — VectorSales
+
+- Renamed the product to **VectorSales** (visible text, downloads, docs). Internal identifiers (storage keys, `sales_hub.db`, backup file marker) are unchanged so existing data keeps working. The GitHub repository, Render service and Cloudflare Worker names are not changed by code.
+- New `vectorsales/` engine built on CrewAI: see `docs/VECTORSALES.md` for what is implemented, tested and not yet built.
+- `crewai>=1.15,<2` added to `requirements.txt`; the Docker image gets larger.
+
+## Launch-readiness pass
 
 ### Money and dates
 - Sell price from margin is exact (no $80.01 for $60 at 25%); margins of 100% or more and missing/negative costs are refused with a message instead of being clamped or priced.

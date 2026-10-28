@@ -291,7 +291,7 @@ def style_header_row(ws, row: int, ncols: int):
 # ==========================================
 # 4. API + shared engine/store
 # ==========================================
-app = FastAPI(title="Office Basics Good/Better/Best Comparison Engine")
+app = FastAPI(title="VectorSales API")
 
 # Every endpoint except these requires a signed-in user (see auth.py).
 PUBLIC_PATHS = {"/health", "/auth/login"}
@@ -1427,6 +1427,13 @@ async def spend_analysis(
         "workbook_url": f"/reports/{xlsx_filename}",
         "executive_summary_url": f"/reports/{docx_filename}",
     }
+
+
+# VectorSales prospecting engine (CrewAI-backed; tenant-scoped; see vectorsales/api.py)
+from vectorsales.api import Services as VectorSalesServices, build_router as build_vectorsales_router  # noqa: E402
+
+vectorsales = VectorSalesServices(DATA_DIR)
+app.include_router(build_vectorsales_router(authenticator, vectorsales))
 
 
 # The web app, last so every API route above takes precedence.

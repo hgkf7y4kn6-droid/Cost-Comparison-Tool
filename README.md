@@ -1,4 +1,6 @@
-# Sales Hub
+# VectorSales
+
+> Formerly "Sales Hub". The AI prospecting engine (CrewAI) is described in [docs/VECTORSALES.md](docs/VECTORSALES.md).
 
 Prospecting, cost comparisons, proposals and accounts for a field sales team,
 in one web app. The FastAPI backend serves both the API and the web app, so a
@@ -24,7 +26,7 @@ Because a case of c-fold towels, multifold towels, and roll towels all contain
 different unit counts, price alone isn't a fair comparison — the report
 normalizes to **cost per use** whenever `uses_per_case` is available.
 
-## Sales Hub tabs
+## VectorSales tabs
 Above every tab, the **current deal** bar shows the customer you're working on
 (a lead or an account), where it stands, and one **Next** button for the step
 that moves it forward (find the decision-maker → send outreach → run a cost
@@ -235,6 +237,7 @@ Google Maps Platform terms before relying on stored copies long-term.
 - `auth.py` — sign-in: password hashing, signed session tokens, lockout.
 - `accounts_store.py` — shared leads, accounts and (opt-in) proposals: who may see/edit
   them, revisions and conflict detection, audit log, backups, export/restore.
+- `vectorsales/` — the CrewAI-based prospecting engine (ICP, enrichment budgets, triggers, scoring, outreach drafts, geo, qualification), served under `/vs`.
 - `pricing.py` — Decimal money rules (sell price from margin, cost per use, savings).
 - `hardening.py` — upload/size/signature checks, bounded heavy work, response headers.
 - `table_extract.py` — Excel/PDF → rows for lead import.

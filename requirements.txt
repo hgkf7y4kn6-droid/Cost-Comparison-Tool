@@ -13,3 +13,4 @@ pytesseract
 faiss-cpu
 torch
 transformers
+crewai>=1.15,<2

@@ -297,7 +297,7 @@ class RecordStore:
         overwrite=True replaces existing records with the file's versions."""
         records = payload.get("records") if isinstance(payload, dict) else None
         if not isinstance(records, list):
-            raise ValueError("That isn't a Sales Hub export file.")
+            raise ValueError("That isn't a VectorSales export file.")
         added = replaced = skipped = 0
         with self.lock:
             for item in records:

@@ -1,4 +1,4 @@
-# Sales Hub — operations, security and data guide
+# VectorSales — operations, security and data guide
 
 What is stored where, how to back it up and get it back, who can see what, what
 each number means, and what to check before real users go live. It describes what

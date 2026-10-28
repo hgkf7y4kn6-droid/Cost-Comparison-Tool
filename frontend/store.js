@@ -1,4 +1,4 @@
-// Shared state for every Sales Hub tab (leads, quotes, accounts), persisted to
+// Shared state for every VectorSales tab (leads, quotes, accounts), persisted to
 // this browser's localStorage. Tabs call SalesHub.save() after changing
 // SalesHub.state and subscribe with SalesHub.on() to re-render when another
 // tab changes something.
@@ -151,7 +151,7 @@ window.SalesHub = (function () {
     } catch (_) {
       const aside = setAside(raw, "unreadable");
       notify("corrupt", aside.kept
-        ? "The data saved in this browser couldn't be read, so Sales Hub started empty. A copy of the unreadable data was kept — open Backup to download it."
+        ? "The data saved in this browser couldn't be read, so VectorSales started empty. A copy of the unreadable data was kept — open Backup to download it."
         : "The data saved in this browser couldn't be read and storage is full, so no copy could be kept. Open Backup to download what is left.", "err");
       // The unreadable value stays under STORE_KEY until the first successful save of new data replaces it,
       // which is safe now that a copy exists; if the copy failed, don't overwrite it.
@@ -160,7 +160,7 @@ window.SalesHub = (function () {
     }
     if (Number.isInteger(saved.schemaVersion) && saved.schemaVersion > SCHEMA_VERSION) {
       readOnly = true;
-      notify("newer", "This browser's data was saved by a newer version of Sales Hub. This older page will not change it — refresh to load the current version.", "err");
+      notify("newer", "This browser's data was saved by a newer version of VectorSales. This older page will not change it — refresh to load the current version.", "err");
       Object.assign(state, normalize({ ...saved, schemaVersion: SCHEMA_VERSION }).data);
       return;
     }

@@ -15,8 +15,8 @@ jobs:
         with:
           node-version: "22"
       # The model libraries are stubbed in tests/conftest.py, so the heavy requirements aren't needed.
-      - run: pip install fastapi uvicorn python-multipart pydantic numpy pandas openpyxl xlrd pdfplumber python-docx "Pillow>=13.0.0" pytest httpx ruff
-      - run: ruff check --select E9,F backend.py auth.py accounts_store.py hardening.py pricing.py table_extract.py tests
+      - run: pip install fastapi uvicorn python-multipart pydantic numpy pandas openpyxl xlrd pdfplumber python-docx "Pillow>=13.0.0" "crewai>=1.15,<2" pytest httpx ruff
+      - run: ruff check --select E9,F backend.py auth.py accounts_store.py hardening.py pricing.py table_extract.py vectorsales tests
       - run: python -m pytest -q
       - run: node --test "tests/js/*.test.js"
       - run: npx --yes eslint@9 -c eslint.config.js "frontend/*.js" "tests/js/*.js" "tests/e2e/*.js"
