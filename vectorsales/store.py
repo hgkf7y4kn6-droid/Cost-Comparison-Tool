@@ -44,6 +44,11 @@ class Store:
             CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT, at TEXT, actor TEXT, action TEXT, target TEXT, detail TEXT);
             CREATE TABLE IF NOT EXISTS ai_cache (tenant TEXT, key TEXT, value TEXT, created TEXT, ttl_days INTEGER, PRIMARY KEY (tenant, key));
             CREATE TABLE IF NOT EXISTS icp (tenant TEXT PRIMARY KEY, data TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS settings (tenant TEXT, key TEXT, value TEXT NOT NULL, PRIMARY KEY (tenant, key));
+            CREATE TABLE IF NOT EXISTS score_snapshots (tenant TEXT, id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT, at TEXT, priority INTEGER,
+              fit INTEGER, intent INTEGER, contactability INTEGER, evidence INTEGER, weights TEXT, why TEXT);
+            CREATE INDEX IF NOT EXISTS snap_acct ON score_snapshots (tenant, account_id, at);
+            CREATE TABLE IF NOT EXISTS outcomes (tenant TEXT, account_id TEXT, type TEXT, at TEXT, value_usd REAL, PRIMARY KEY (tenant, account_id, type));
         """)
 
     @contextlib.contextmanager
@@ -69,6 +74,47 @@ class Store:
         with self.lock:
             rows = self.db.execute("SELECT at,actor,action,target,detail FROM audit WHERE tenant=? ORDER BY id DESC LIMIT ?", (tenant, limit)).fetchall()
         return [dict(zip(("at", "actor", "action", "target", "detail"), r)) for r in rows]
+
+    # --- settings, score snapshots and real outcomes (for calibration) -----------------
+    def get_setting(self, tenant: str, key: str) -> Optional[Any]:
+        with self.lock:
+            row = self.db.execute("SELECT value FROM settings WHERE tenant=? AND key=?", (tenant, key)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def set_setting(self, tenant: str, key: str, value: Any) -> None:
+        with self.lock:
+            self.db.execute("INSERT INTO settings VALUES (?,?,?) ON CONFLICT(tenant,key) DO UPDATE SET value=excluded.value", (tenant, key, json.dumps(value)))
+
+    def snapshot_score(self, tenant: str, aid: str, scored: Dict[str, Any], *, min_gap_days: int = 7, now: Optional[datetime] = None) -> bool:
+        """Freezes the score as it was when a decision was made, so it can later be compared with what happened.
+        At most one snapshot per account per `min_gap_days` (repeat views don't create new "predictions")."""
+        now = now or datetime.now(timezone.utc)
+        p = scored["priority"]
+        with self.lock:
+            last = self.db.execute("SELECT at FROM score_snapshots WHERE tenant=? AND account_id=? ORDER BY at DESC LIMIT 1", (tenant, aid)).fetchone()
+            if last and (now - datetime.fromisoformat(last[0])).days < min_gap_days:
+                return False
+            parts = p["parts"]
+            self.db.execute("INSERT INTO score_snapshots (tenant,account_id,at,priority,fit,intent,contactability,evidence,weights,why) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            (tenant, aid, now.isoformat(), p["priority"], parts["fit"], parts["intent"], parts["contactability"], parts["evidence"],
+                             json.dumps(p["weights"]), json.dumps(p["explanation"])))
+        return True
+
+    def record_outcome(self, tenant: str, aid: str, type_: str, at: Optional[str] = None, value_usd: Optional[float] = None) -> bool:
+        """Idempotent per (account, type): the first recorded time stands. Returns True if newly recorded."""
+        with self.lock:
+            n = self.db.execute("INSERT OR IGNORE INTO outcomes VALUES (?,?,?,?,?)", (tenant, aid, type_, at or _now(), value_usd)).rowcount
+        return bool(n)
+
+    def calibration_rows(self, tenant: str, outcome: str) -> List[Dict[str, Any]]:
+        """One row per account: its FIRST snapshot (the prediction) and when (if ever) the outcome happened."""
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT s.account_id, s.at, s.priority, s.fit, s.intent, s.contactability, s.evidence, o.at FROM score_snapshots s "
+                "LEFT JOIN outcomes o ON o.tenant=s.tenant AND o.account_id=s.account_id AND o.type=? "
+                "WHERE s.tenant=? AND s.id=(SELECT MIN(id) FROM score_snapshots WHERE tenant=s.tenant AND account_id=s.account_id)", (outcome, tenant)).fetchall()
+        keys = ("account_id", "snapshot_at", "priority", "fit", "intent", "contactability", "evidence", "outcome_at")
+        return [dict(zip(keys, r)) for r in rows]
 
     # --- ICP --------------------------------------------------------------------
     def save_icp(self, tenant: str, data: Dict) -> None:

@@ -66,13 +66,43 @@ price the cost is recorded as 0 **and marked estimated**. Set budgets with `PUT 
 | Tenant isolation (every query tenant-scoped; HTTP-level cross-tenant tests) | implemented, tested |
 | Geo radius clustering and economics | implemented, tested (no routing API; straight-line distance) |
 | Unit-cost metrics (unavailable when a denominator is missing) | implemented; outcome-based ones stay unavailable until outcome events are recorded |
+| Model-vs-accuracy harness (`python -m vectorsales.evaluate`) and score calibration on recorded outcomes (`GET /vs/calibration`) | implemented, tested with scripted models and synthetic outcomes; **no real model or real outcome data has been run through it** |
 | Plan entitlements / usage quotas per subscription tier, billing | **not implemented** (budgets cap spend; no plan model) |
 | Real providers (discovery, enrichment, verification, intent feeds), CRM sync, calendar, email sending, LinkedIn | **not implemented** — need vendor accounts/credentials |
 | Persistent job queue with priorities/dead-letter | **not implemented** — long calls run in the request's thread pool, bounded by the existing heavy-work limiter |
 | UI for VectorSales | **not implemented** — API only |
-| Model-vs-accuracy evaluation harness, score calibration on real outcomes | **not implemented** (needs labelled data and real models) |
 
 ## Measured (synthetic data, SQLite file on local disk)
 Ingesting 5,000 candidate accounts through filter→dedupe→merge with no providers: 6.7 s before batching commits, 0.34 s after
 (~14,600/s); re-import of the same 5,000: 0.34 s, no duplicates; scoring 500 accounts: 0.03 s. These are single-process
 laptop-class numbers, not a capacity guarantee.
+
+## Choosing models: the evaluation harness
+```
+python -m vectorsales.evaluate triggers my_labelled_cases.json \
+    --model gpt-4o-mini:0.15:0.60 --model gpt-4o:2.50:10.00 --max-usd 2 --dry-run   # estimate first
+python -m vectorsales.evaluate triggers my_labelled_cases.json --model gpt-4o-mini:0.15:0.60 --max-usd 2
+```
+(`NAME:USD_per_M_input_tokens:USD_per_M_output_tokens`; use your provider's current prices, plus its API key variable.)
+A case is `{"documents":[{"source","text","authoritative"?}], "expected":[{"kind","contains"}], "injection"?: true}`;
+`vectorsales/eval_cases/triggers_sample.json` shows the format (it is **synthetic and has 10 cases** — replace it with real,
+hand-labelled documents; 30+ before the report calls itself conclusive). Each candidate (rules-only, then each model — which
+runs *on top of* the rules, as in production) is run in an isolated store and ledger and reported with precision, recall and F1
+(with 95% intervals), fabricated quotes the verifier had to discard, injection documents that produced triggers, model failures,
+p50/p95 latency and cost per case. `recommend` then picks the **cheapest candidate that clears explicit thresholds** (default F1 ≥ 0.8,
+precision ≥ 0.9, zero fabrications, zero acted-on injections) and shows what each extra dollar bought over rules-only.
+Model runs require prices and are hard-capped (`--max-usd` per candidate). `drafts` does the same for email drafts, measuring
+rule-compliant acceptance versus template fallback (tone still needs human review).
+Run it before changing `VS_MODEL_CHEAP`/`VS_MODEL_STRONG` defaults, and again when a provider changes a model.
+
+## Calibrating the score on real outcomes
+1. Scores are **frozen when a decision is made** (an outreach draft, or its approval; at most one per account per 7 days).
+2. Record what happened: `POST /vs/accounts/{id}/outcomes {"type": "meeting_booked" | "sales_accepted" | "opportunity" | "won" | "lost"}`
+   (idempotent; the first time recorded stands).
+3. `GET /vs/calibration?outcome=meeting_booked&window_days=60` compares each account's *first* frozen score with its outcome within the
+   window. Accounts whose window hasn't closed are left out (not counted as failures). It reports base rate, bucket conversion rates with
+   95% intervals, AUC overall and per component, whether buckets rise monotonically, and — only with enough data (≥100 closed accounts,
+   ≥20 converted and ≥20 not) — an isotonic score→observed-rate map and **suggested weights** proportional to each component's lift over
+   chance. With less data it says so and recommends nothing. If the score is no better than chance it says that too.
+4. Weights are never changed automatically. A manager applies them with `PUT /vs/scoring/weights` (audited); the queue then uses them.
+   The priority stays a ranking score; only the observed bucket rates describe likelihood, for that tenant, outcome and window.

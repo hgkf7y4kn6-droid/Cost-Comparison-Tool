@@ -35,7 +35,7 @@ def make_fake_llm(replies):
 
         def call(self, messages, tools=None, callbacks=None, available_functions=None, from_task=None, from_agent=None, **kw):
             self.prompts.append(json.dumps(messages))
-            r = replies[min(self.calls, len(replies) - 1)]
+            r = replies(self.prompts[-1]) if callable(replies) else replies[min(self.calls, len(replies) - 1)]
             self.calls += 1
             if isinstance(r, Exception):
                 raise r

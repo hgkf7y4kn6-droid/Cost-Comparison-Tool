@@ -4,6 +4,8 @@
 
 - Renamed the product to **VectorSales** (visible text, downloads, docs). Internal identifiers (storage keys, `sales_hub.db`, backup file marker) are unchanged so existing data keeps working. The GitHub repository, Render service and Cloudflare Worker names are not changed by code.
 - New `vectorsales/` engine built on CrewAI: see `docs/VECTORSALES.md` for what is implemented, tested and not yet built.
+- Model-vs-accuracy evaluation harness (`python -m vectorsales.evaluate`) and outcome-based score calibration (`/vs/calibration`, `/vs/accounts/{id}/outcomes`, `/vs/scoring/weights`).
+- Documents containing instruction-like text now contribute nothing, not even to the rule-based detector (found by the harness: rules had extracted a "funding" fact from an injected page).
 - `crewai>=1.15,<2` added to `requirements.txt`; the Docker image gets larger.
 
 ## Launch-readiness pass

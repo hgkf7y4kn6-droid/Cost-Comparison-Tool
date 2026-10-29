@@ -180,8 +180,12 @@ class Intelligence:
                 continue
             safe_docs.append(d)
             wrapped.append(block)
-        found = rule_triggers(documents, today)  # rules read the text as data; they can't be instructed
+        # Rules can't be instructed, but text that tries to steer a model is not a trustworthy source of facts either:
+        # documents flagged above contribute nothing (they're listed in the notes for a person to look at).
+        found = rule_triggers(safe_docs, today)
         used_ai = False
+        discarded = 0
+        model_failed = False
         want_ai = mode == "always" or (mode == "auto" and not found)
         if want_ai and safe_docs and self.router.enabled and crewai_available():
             key = hashlib.sha256(json.dumps([PROMPT_VERSION, self.router.cheap_name, [(d.get("source"), clean_text(d.get("text", ""))) for d in safe_docs]]).encode()).hexdigest()
@@ -208,10 +212,12 @@ class Intelligence:
                     self.store.cache_put(tenant, key, json.dumps([i.model_dump() for i in items]), self.ttl)
                     used_ai = True
                 elif not any("AI skipped" in n for n in notes):
+                    model_failed = True
                     notes.append("The model call failed or returned an unusable answer; rules-only results were used.")
             if items:
                 found += verify_triggers(items, safe_docs, today)
                 dropped = len(items) - len([f for f in found if f.get("method") == "model"])
+                discarded = max(dropped, 0)
                 if dropped:
                     notes.append(f"{dropped} model-suggested trigger(s) were discarded because their quote isn't in the source.")
         elif want_ai and not self.router.enabled:
@@ -225,7 +231,8 @@ class Intelligence:
             seen.add(k)
             stored += self.store.add_trigger(tenant, aid, t)["created"]
         review = [t for t in found if t["confidence"] < 0.5 or not t["verified"]]
-        return {"triggers": found, "new": stored, "used_ai": used_ai, "needs_review": len(review), "notes": notes}
+        return {"triggers": found, "new": stored, "used_ai": used_ai, "needs_review": len(review), "notes": notes,
+                "discarded": discarded, "model_failed": model_failed}
 
     # --- outreach drafting ------------------------------------------------------------------------
     def draft_outreach(self, tenant: str, aid: str, contact_id: str, *, step: int = 1, campaign: str = "default", challenge: str,

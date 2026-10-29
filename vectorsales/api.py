@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from . import geo, metrics, outreach, qualification
+from . import calibration, geo, metrics, outreach, qualification
 from .crews import Intelligence, ModelRouter, crewai_available
 from .ledger import Ledger
 from .models import ICP
@@ -109,6 +109,19 @@ class GeoBody(BaseModel):
     min_priority: int = Field(default=40, ge=0, le=100)
 
 
+class OutcomeBody(BaseModel):
+    type: str = Field(pattern="^(meeting_booked|sales_accepted|opportunity|won|lost)$")
+    at: Optional[str] = None
+    value_usd: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
+
+
+class WeightsBody(BaseModel):
+    fit: float = Field(ge=0, le=1)
+    intent: float = Field(ge=0, le=1)
+    contactability: float = Field(ge=0, le=1)
+    evidence: float = Field(ge=0, le=1)
+
+
 class QualBody(BaseModel):
     answers: Dict[str, Dict[str, Any]]
 
@@ -129,6 +142,12 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
     def icp_for(tenant: str) -> ICP:
         saved = S.store.load_icp(tenant)
         return ICP(**saved) if saved else ICP()
+
+    def weights_for(tenant: str) -> Optional[Dict[str, float]]:
+        return S.store.get_setting(tenant, "score_weights")
+
+    async def score(tenant: str, aid: str) -> Dict:
+        return await run_in_threadpool(S.pipeline.score, tenant, aid, icp_for(tenant), weights_for(tenant))
 
     def account_or_404(tenant: str, aid: str) -> Dict:
         a = S.store.get_account(tenant, aid)
@@ -164,7 +183,7 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
         icp = icp_for(tenant)
         out = []
         for a in S.store.list_accounts(tenant, limit=500):
-            sc = await run_in_threadpool(S.pipeline.score, tenant, a["id"], icp)
+            sc = await score(tenant, a["id"])
             if sc["icp"]["status"] in ("excluded", "ineligible"):
                 continue
             out.append({"id": a["id"], "name": a["values"].get("name"), "status": a["status"], "priority": sc["priority"]["priority"],
@@ -218,7 +237,8 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
     async def draft(aid: str, body: DraftBody, request: Request):
         tenant, _ = who(request)
         account_or_404(tenant, aid)
-        sc = await run_in_threadpool(S.pipeline.score, tenant, aid, icp_for(tenant))
+        sc = await score(tenant, aid)
+        S.store.snapshot_score(tenant, aid, sc)  # the prediction as it stood when the draft was made
         try:
             return await run_in_threadpool(S.ai.draft_outreach, tenant, aid, body.contact_id, step=body.step, campaign=body.campaign,
                                            challenge=body.challenge, resources=body.resources, sender=body.sender,
@@ -232,6 +252,8 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
         need_manager(request)
         if not S.store.transition_outreach(tenant, oid, ("draft",), "approved", email, approved_by=email):
             raise HTTPException(409, "Only a draft can be approved.")
+        o = S.store.get_outreach(tenant, oid)
+        S.store.snapshot_score(tenant, o["account_id"], await score(tenant, o["account_id"]))
         return {"id": oid, "state": "approved"}
 
     @r.post("/outreach/{oid}/send")
@@ -312,9 +334,46 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
         pool = []
         for a in S.store.list_accounts(tenant, 500):
             v = a["values"]
-            sc = await run_in_threadpool(S.pipeline.score, tenant, a["id"], icp)
+            sc = await score(tenant, a["id"])
             pool.append({"id": a["id"], "name": v.get("name"), "lat": v.get("lat"), "lng": v.get("lng"), "priority": sc["priority"]["priority"]})
         return geo.cluster_around(body.anchor, pool, radius_miles=body.radius_miles, max_stops=body.max_stops, min_priority=body.min_priority)
+
+    @r.post("/accounts/{aid}/outcomes")
+    async def outcome(aid: str, body: OutcomeBody, request: Request):
+        """Record what really happened (meeting booked, accepted by sales…). This is the ground truth calibration learns from."""
+        tenant, email = who(request)
+        account_or_404(tenant, aid)
+        new = S.store.record_outcome(tenant, aid, body.type, body.at, body.value_usd)
+        if new:
+            S.store.audit(tenant, email, f"outcome_{body.type}", aid)
+            if body.type == "meeting_booked":
+                S.store.set_status(tenant, aid, "meeting_booked")
+        return {"recorded": new}
+
+    @r.get("/calibration")
+    async def calib(request: Request, outcome: str = "meeting_booked", window_days: int = 60):
+        """How well the priority score predicted this outcome. Read-only; weights change only via PUT /vs/scoring/weights."""
+        tenant, _ = who(request)
+        if outcome not in ("meeting_booked", "sales_accepted", "opportunity", "won") or not 7 <= window_days <= 365:
+            raise HTTPException(422, "Unknown outcome, or window outside 7–365 days.")
+        rows = S.store.calibration_rows(tenant, outcome)
+        return {"outcome": outcome, **calibration.calibrate(rows, window_days=window_days), "current_weights": weights_for(tenant)}
+
+    @r.get("/scoring/weights")
+    async def get_weights(request: Request):
+        from .scoring import DEFAULT_WEIGHTS
+        return weights_for(who(request)[0]) or DEFAULT_WEIGHTS
+
+    @r.put("/scoring/weights")
+    async def put_weights(body: WeightsBody, request: Request):
+        tenant, email = who(request)
+        need_manager(request)
+        w = body.model_dump()
+        if sum(w.values()) <= 0:
+            raise HTTPException(422, "At least one weight must be above zero.")
+        S.store.set_setting(tenant, "score_weights", w)
+        S.store.audit(tenant, email, "weights_update", "", str(w))
+        return w
 
     @r.post("/qualification")
     async def qualify(body: QualBody, request: Request):

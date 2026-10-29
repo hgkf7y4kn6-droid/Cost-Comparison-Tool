@@ -160,3 +160,35 @@ def test_account_deletion_is_manager_only_and_audited(client, rep, boss, vs):
     assert client.delete(f"/vs/accounts/{aid}", headers=boss).status_code == 200
     assert client.get(f"/vs/accounts/{aid}", headers=rep).status_code == 404
     assert client.get("/vs/audit", headers=boss).json()["entries"][0]["action"] == "delete_account"
+
+
+def test_outcomes_calibration_and_weights_flow(client, rep, boss, vs):
+    aid = setup_account(client, rep)
+    cid, oid = with_contact_and_draft(client, rep, aid)               # drafting freezes the score as a prediction
+    assert vs.store.db.execute("SELECT COUNT(*) FROM score_snapshots WHERE tenant='default'").fetchone()[0] == 1
+    client.post(f"/vs/outreach/{oid}/approve", headers=boss)           # approving within a week doesn't make a second one
+    assert vs.store.db.execute("SELECT COUNT(*) FROM score_snapshots WHERE tenant='default'").fetchone()[0] == 1
+    assert client.post(f"/vs/accounts/{aid}/outcomes", json={"type": "meeting_booked"}, headers=rep).json() == {"recorded": True}
+    assert client.post(f"/vs/accounts/{aid}/outcomes", json={"type": "meeting_booked"}, headers=rep).json() == {"recorded": False}
+    assert client.post(f"/vs/accounts/{aid}/outcomes", json={"type": "bogus"}, headers=rep).status_code == 422
+    c = client.get("/vs/calibration", headers=rep).json()
+    assert c["sufficient_data"] is False and c["suggested_weights"] is None and any("Too little data" in n for n in c["notes"])
+    assert client.get("/vs/calibration?window_days=1", headers=rep).status_code == 422
+    # weights: manager only, validated, used by scoring, tenant-scoped
+    w = {"fit": 0.0, "intent": 1.0, "contactability": 0.0, "evidence": 0.0}
+    assert client.put("/vs/scoring/weights", json=w, headers=rep).status_code == 403
+    assert client.put("/vs/scoring/weights", json={**w, "intent": 0.0}, headers=boss).status_code == 422
+    assert client.put("/vs/scoring/weights", json=w, headers=boss).status_code == 200
+    q = client.get("/vs/queue", headers=rep).json()["accounts"][0]
+    assert q["priority"] == q["intent"]                                # all weight on intent
+    assert client.get("/vs/scoring/weights", headers=rep2_headers(client)).json()["fit"] == 0.30   # other tenant unaffected
+
+
+def rep2_headers(client):
+    return {"Authorization": "Bearer " + client.post("/auth/login", json={"email": "rep2@example.com", "password": "correct horse battery staple"}).json()["token"]}
+
+
+def test_outcome_and_calibration_are_tenant_scoped(client, rep, rep2, vs):
+    aid = setup_account(client, rep)
+    assert client.post(f"/vs/accounts/{aid}/outcomes", json={"type": "won"}, headers=rep2).status_code == 404
+    assert client.get("/vs/calibration", headers=rep2).json()["matured"] == 0
