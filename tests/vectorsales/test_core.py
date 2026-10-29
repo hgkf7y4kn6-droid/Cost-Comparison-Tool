@@ -96,7 +96,7 @@ def test_staleness_uses_timestamps(store):
 
 def test_contacts_missing_email_stays_missing_and_invalid_rejected(store):
     aid = store.upsert_account("t", {"name": "A", "domain": "a.com"}, source="s")["id"]
-    c = store.upsert_contact("t", aid, {"name": "Jo Smith", "title": "VP Ops", "email": "not-an-email"}, source="s")
+    store.upsert_contact("t", aid, {"name": "Jo Smith", "title": "VP Ops", "email": "not-an-email"}, source="s")
     assert "email" not in store.contacts_for("t", aid)[0]["values"]
     with pytest.raises(ValueError):
         store.upsert_contact("t", aid, {}, source="s")

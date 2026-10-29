@@ -180,7 +180,6 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
     @r.get("/queue")
     async def queue(request: Request, limit: int = 50):
         tenant, _ = who(request)
-        icp = icp_for(tenant)
         out = []
         for a in S.store.list_accounts(tenant, limit=500):
             sc = await score(tenant, a["id"])
@@ -330,7 +329,6 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
     @r.post("/geo/clusters")
     async def clusters(body: GeoBody, request: Request):
         tenant, _ = who(request)
-        icp = icp_for(tenant)
         pool = []
         for a in S.store.list_accounts(tenant, 500):
             v = a["values"]
