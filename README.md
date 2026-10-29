@@ -1,4 +1,4 @@
-# Sales Hub
+# VectorSales
 
 Prospecting, cost comparisons, proposals and accounts for a field sales team,
 in one web app. The FastAPI backend serves both the API and the web app, so a
