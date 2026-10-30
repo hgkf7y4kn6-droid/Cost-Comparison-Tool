@@ -38,8 +38,25 @@ price the cost is recorded as 0 **and marked estimated**. Set budgets with `PUT 
 `PUT/GET /vs/icp` · `POST /vs/accounts/import` (≤500) · `GET /vs/queue` (ranked, with explanations and field provenance) ·
 `GET/DELETE /vs/accounts/{id}` · `POST …/contacts`, `…/triggers`, `…/triggers/assess`, `…/outreach/draft` ·
 `POST /vs/outreach/{id}/approve` (manager) · `POST /vs/outreach/{id}/send` · `POST /vs/suppression` ·
-`POST /vs/contacts/{id}/events` (reply, meeting_booked, bounce, unsubscribe, invalid) · `PUT /vs/budgets` ·
-`GET /vs/usage` · `POST /vs/geo/clusters` · `POST /vs/qualification` · `GET /vs/audit` (manager) · `GET /vs/health`.
+`POST /vs/contacts/{id}/events` (reply, meeting_booked, bounce, unsubscribe, invalid) (a `reply` may carry `text`, which is kept as persona evidence) · `PUT /vs/budgets` ·
+`POST /vs/accounts/{id}/persona/signals` (web | email | note evidence) · `GET /vs/accounts/{id}/persona?contact_id=` · `GET /vs/usage` · `POST /vs/geo/clusters` · `POST /vs/qualification` · `GET /vs/audit` (manager) · `GET /vs/health`.
+
+## Prospect personas and agent styles
+The outreach writer adapts to how the prospect likely communicates (`vectorsales/personas.py`). Evidence comes from web
+research, the prospect's own email replies and rep notes, weighted 1 / 3 / 2 (behaviour beats inference), halved after
+90 days. Inference is rules-only (no model call, no spend) and returns the quotes behind the answer.
+
+| Prospect persona | Agent style used |
+| --- | --- |
+| Impatient / Urgent | Efficient Concierge (shortest drafts, point first, one ask) |
+| Methodical / Detailed | Analytical Specialist (precise, offers documentation/specifics) |
+| Frustrated / Emotional | Empathic Problem-Solver (acknowledge first, no pitch, easy opt-out) |
+| Novice / Confused | Proactive Advisor (plain language, one idea, offers a walkthrough) |
+
+Thin or conflicting evidence gives **unknown** and a neutral draft; a web hint alone is never "established". Expressed
+frustration in an email or note takes priority over other cues. The persona only shapes tone and length: every draft
+still passes the same validator (evidence, no invented claims, opt-out), the email never mentions the inference, and
+signals are deleted with the account. A persona is a hint about communication preference, not a judgment of the person.
 
 ## What the software does versus what it only recommends
 * A draft is not a send. `send` requires: approved by a manager, a clean suppression check, an account not

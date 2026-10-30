@@ -48,3 +48,6 @@ class EmailDraft(BaseModel):
     body: str
     resource_url: Optional[str] = None
     evidence_refs: List[str] = []    # triggers (by evidence excerpt) the draft relies on
+    # set by the engine after drafting (never by the model): which inferred persona/agent style shaped the tone
+    persona: Optional[str] = None
+    agent_style: Optional[str] = None

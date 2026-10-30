@@ -192,3 +192,19 @@ def test_outcome_and_calibration_are_tenant_scoped(client, rep, rep2, vs):
     aid = setup_account(client, rep)
     assert client.post(f"/vs/accounts/{aid}/outcomes", json={"type": "won"}, headers=rep2).status_code == 404
     assert client.get("/vs/calibration", headers=rep2).json()["matured"] == 0
+
+
+def test_persona_signals_feed_the_draft_and_replies_are_recorded_as_email_evidence(client, rep, vs):
+    aid = setup_account(client, rep)
+    cid, _ = with_contact_and_draft(client, rep, aid)
+    assert client.get(f"/vs/accounts/{aid}/persona?contact_id={cid}", headers=rep).json()["persona"] is None
+    assert client.post(f"/vs/accounts/{aid}/persona/signals", json={"source": "sms", "text": "hello there"}, headers=rep).status_code == 422
+    assert client.post(f"/vs/accounts/{aid}/persona/signals", json={"source": "note", "text": "x y z", "contact_id": "ct_nope"}, headers=rep).status_code == 404
+    assert client.post(f"/vs/accounts/{aid}/persona/signals", json={"source": "note", "text": "On the call: wants the documentation and compliance details first.", "contact_id": cid}, headers=rep).status_code == 200
+    p = client.get(f"/vs/accounts/{aid}/persona?contact_id={cid}", headers=rep).json()
+    assert p["persona"] == "methodical" and p["agent_style"] == "analytical"
+    d = client.post(f"/vs/accounts/{aid}/outreach/draft", json={"contact_id": cid, "challenge": "warehouse consolidation", "step": 2}, headers=rep).json()
+    assert d["draft"]["agent_style"] == "analytical"
+    client.post(f"/vs/contacts/{cid}/events", json={"type": "reply", "text": "Honestly I'm frustrated. We still haven't heard back; this is unacceptable."}, headers=rep)
+    assert client.get(f"/vs/accounts/{aid}/persona?contact_id={cid}", headers=rep).json()["persona"] == "frustrated"
+    assert client.get(f"/vs/accounts/{aid}/persona", headers={"Authorization": "Bearer x"}).status_code in (401, 403)

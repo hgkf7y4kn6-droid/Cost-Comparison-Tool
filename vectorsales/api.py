@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from . import calibration, geo, metrics, outreach, qualification
+from . import calibration, geo, metrics, outreach, personas, qualification
 from .crews import Intelligence, ModelRouter, crewai_available
 from .ledger import Ledger
 from .models import ICP
@@ -92,6 +92,14 @@ class SuppressBody(BaseModel):
 
 class EventBody(BaseModel):
     type: str = Field(pattern="^(reply|meeting_booked|bounce|unsubscribe|invalid)$")
+    text: str = Field(default="", max_length=6000)  # the prospect's reply, when type is "reply": feeds persona inference
+
+
+class PersonaSignalBody(BaseModel):
+    source: str = Field(pattern="^(web|email|note)$")
+    text: str = Field(min_length=3, max_length=6000)
+    contact_id: str = Field(default="", max_length=64)
+    observed_at: Optional[str] = None
 
 
 class BudgetBody(BaseModel):
@@ -245,6 +253,23 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
         except LookupError as e:
             raise HTTPException(404, str(e))
 
+    @r.post("/accounts/{aid}/persona/signals")
+    async def add_persona_signal(aid: str, body: PersonaSignalBody, request: Request):
+        """Web research, a prospect's email, or a rep's note: evidence for how this prospect likes to be written to."""
+        tenant, email = who(request)
+        account_or_404(tenant, aid)
+        if body.contact_id and not any(c["id"] == body.contact_id for c in S.store.contacts_for(tenant, aid)):
+            raise HTTPException(404, "No such contact on this account.")
+        out = S.store.add_persona_signal(tenant, aid, body.source, body.text, body.contact_id, body.observed_at)
+        S.store.audit(tenant, email, "persona_signal", aid, body.source)
+        return out
+
+    @r.get("/accounts/{aid}/persona")
+    async def get_persona(aid: str, request: Request, contact_id: str = ""):
+        tenant, _ = who(request)
+        account_or_404(tenant, aid)
+        return personas.infer_persona(S.store.persona_signals_for(tenant, aid, contact_id))
+
     @r.post("/outreach/{oid}/approve")
     async def approve(oid: str, request: Request):
         tenant, email = who(request)
@@ -296,6 +321,8 @@ def build_router(auth_module_authenticator, svc: Services) -> APIRouter:
         if not row:
             raise HTTPException(404, "No such contact.")
         n = S.store.cancel_pending_for_contact(tenant, cid, body.type, email)
+        if body.type == "reply" and body.text.strip():
+            S.store.add_persona_signal(tenant, row[0], "email", body.text, cid)
         status = {"reply": "replied", "meeting_booked": "meeting_booked"}.get(body.type)
         if status:
             S.store.set_status(tenant, row[0], status)

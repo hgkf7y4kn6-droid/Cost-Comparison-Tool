@@ -48,6 +48,9 @@ class Store:
             CREATE TABLE IF NOT EXISTS score_snapshots (tenant TEXT, id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT, at TEXT, priority INTEGER,
               fit INTEGER, intent INTEGER, contactability INTEGER, evidence INTEGER, weights TEXT, why TEXT);
             CREATE INDEX IF NOT EXISTS snap_acct ON score_snapshots (tenant, account_id, at);
+            CREATE TABLE IF NOT EXISTS persona_signals (tenant TEXT, id TEXT, account_id TEXT, contact_id TEXT, source TEXT, text TEXT, observed_at TEXT,
+              created TEXT, PRIMARY KEY (tenant, id));
+            CREATE INDEX IF NOT EXISTS persona_acct ON persona_signals (tenant, account_id);
             CREATE TABLE IF NOT EXISTS outcomes (tenant TEXT, account_id TEXT, type TEXT, at TEXT, value_usd REAL, PRIMARY KEY (tenant, account_id, type));
         """)
 
@@ -240,7 +243,7 @@ class Store:
         """Deletes an account with its contacts, triggers and drafts (privacy deletion). Audited."""
         with self.lock:
             n = self.db.execute("DELETE FROM accounts WHERE tenant=? AND id=?", (tenant, aid)).rowcount
-            for t in ("contacts", "triggers", "outreach"):
+            for t in ("contacts", "triggers", "outreach", "persona_signals"):
                 self.db.execute(f"DELETE FROM {t} WHERE tenant=? AND account_id=?", (tenant, aid))
             self.db.execute("DELETE FROM merges WHERE tenant=? AND account_id=?", (tenant, aid))
         if n:
@@ -265,6 +268,28 @@ class Store:
     def mark_triggers_processed(self, tenant: str, aid: str) -> None:
         with self.lock:
             self.db.execute("UPDATE triggers SET processed=1 WHERE tenant=? AND account_id=?", (tenant, aid))
+
+    # --- persona signals (web research, prospect emails, rep notes) ---------------------------
+    def add_persona_signal(self, tenant: str, aid: str, source: str, text: str, contact_id: str = "", observed_at: Optional[str] = None) -> Dict:
+        """Idempotent on (account, contact, source, text). contact_id '' = about the account/company in general."""
+        if source not in ("web", "email", "note"):
+            raise ValueError("source must be web, email or note.")
+        text = (text or "").strip()[:6000]
+        if not text:
+            raise ValueError("A signal needs text.")
+        sid = "ps_" + __import__("hashlib").sha256(f"{aid}|{contact_id}|{source}|{text}".encode()).hexdigest()[:16]
+        with self.lock:
+            exists = self.db.execute("SELECT 1 FROM persona_signals WHERE tenant=? AND id=?", (tenant, sid)).fetchone()
+            if not exists:
+                self.db.execute("INSERT INTO persona_signals VALUES (?,?,?,?,?,?,?,?)", (tenant, sid, aid, contact_id, source, text, observed_at, _now()))
+        return {"id": sid, "created": not exists}
+
+    def persona_signals_for(self, tenant: str, aid: str, contact_id: str = "") -> List[Dict]:
+        """Signals about this contact plus account-level ones (contact_id ''), oldest first."""
+        with self.lock:
+            rows = self.db.execute("SELECT source, text, observed_at, created, contact_id FROM persona_signals WHERE tenant=? AND account_id=? "
+                                   "AND (contact_id=? OR contact_id='') ORDER BY created", (tenant, aid, contact_id)).fetchall()
+        return [{"source": r[0], "text": r[1], "observed_at": r[2] or r[3][:10], "contact_id": r[4]} for r in rows]
 
     # --- suppression ----------------------------------------------------------------
     def suppress(self, tenant: str, kind: str, value: str, reason: str, actor: str = "system") -> None:

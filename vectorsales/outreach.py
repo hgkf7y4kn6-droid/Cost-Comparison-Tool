@@ -24,13 +24,14 @@ def subject_for(company: str, challenge: str) -> str:
 
 
 def validate_draft(d: EmailDraft, *, evidence: List[str], allowed_resources: Optional[List[str]] = None,
-                   company: str = "") -> List[str]:
+                   company: str = "", max_words: int = MAX_WORDS) -> List[str]:
     """Returns the list of problems (empty = acceptable)."""
     problems: List[str] = []
     body = d.body.strip()
     words = len(re.findall(r"\b\w[\w'’-]*\b", body))
-    if words > MAX_WORDS:
-        problems.append(f"{words} words (max {MAX_WORDS})")
+    max_words = min(max_words, MAX_WORDS)  # a persona can ask for shorter, never longer
+    if words > max_words:
+        problems.append(f"{words} words (max {max_words})")
     paras = [p for p in re.split(r"\n\s*\n", body) if p.strip()]
     if len(paras) > MAX_PARAGRAPHS:
         problems.append(f"{len(paras)} paragraphs (max {MAX_PARAGRAPHS})")
@@ -63,13 +64,34 @@ def validate_draft(d: EmailDraft, *, evidence: List[str], allowed_resources: Opt
 
 
 def fallback_draft(company: str, contact_first: str, challenge: str, evidence_excerpt: str, resource_url: Optional[str] = None,
-                   sender: str = "") -> EmailDraft:
-    """Used when no model is configured/allowed or the model's draft fails validation. Quotes the evidence verbatim, invents nothing."""
+                   sender: str = "", style: Optional[str] = None) -> EmailDraft:
+    """Used when no model is configured/allowed or the model's draft fails validation. Quotes the evidence verbatim, invents nothing.
+    `style` (an agent style from personas.py) only changes tone and structure; unknown/None gives the neutral template."""
     excerpt = evidence_excerpt.strip().rstrip(".")[:160]
-    p1 = f"Hi {contact_first or 'there'}, I noticed this about {company}: \"{excerpt}\"."
-    p2 = f"Teams in that position often find {challenge} becomes harder to manage at the same time." + (f" This may help: {resource_url}" if resource_url else "")
-    p3 = "Worth a short conversation? If this isn't relevant, tell me and I won't follow up (reply \"opt out\" any time)." + (f"\n{sender}" if sender else "")
-    return EmailDraft(subject=subject_for(company, challenge), body="\n\n".join([p1, p2, p3]), resource_url=resource_url, evidence_refs=[evidence_excerpt])
+    hi = contact_first or "there"
+    link = f" This may help: {resource_url}" if resource_url else ""
+    sig = f"\n{sender}" if sender else ""
+    if style == "efficient":
+        parts = [f"Hi {hi}, short version: I noticed \"{excerpt}\" at {company}.",
+                 f"Teams in that spot often struggle with {challenge}.{link}",
+                 "Open to a quick call this week? If this isn't relevant, reply \"opt out\"." + sig]
+    elif style == "analytical":
+        parts = [f"Hi {hi}, I'm writing because of this on record about {company}: \"{excerpt}\".",
+                 f"A change like that usually raises specific questions about {challenge}: scope, dependencies and sequencing. I can send the details.{link}",
+                 "Tell me which of those matters most and I'll reply with specifics. If this isn't relevant, reply \"opt out\" and I won't follow up." + sig]
+    elif style == "empathic":
+        parts = [f"Hi {hi}, I saw this about {company}: \"{excerpt}\". I imagine it adds real pressure.",
+                 f"No pitch here. If {challenge} is on your plate, I'm glad to listen first.{link}",
+                 "If now isn't a good time, just say so and I won't follow up (reply \"opt out\" any time)." + sig]
+    elif style == "proactive":
+        parts = [f"Hi {hi}, I noticed this about {company}: \"{excerpt}\".",
+                 f"In plain terms, {challenge} often gets more complicated when that happens. A common next question is where to start, and I can walk you through it step by step.{link}",
+                 "Want a short walkthrough? If this isn't relevant, reply \"opt out\" and I won't follow up." + sig]
+    else:
+        parts = [f"Hi {hi}, I noticed this about {company}: \"{excerpt}\".",
+                 f"Teams in that position often find {challenge} becomes harder to manage at the same time." + (f" This may help: {resource_url}" if resource_url else ""),
+                 "Worth a short conversation? If this isn't relevant, tell me and I won't follow up (reply \"opt out\" any time)." + sig]
+    return EmailDraft(subject=subject_for(company, challenge), body="\n\n".join(parts), resource_url=resource_url, evidence_refs=[evidence_excerpt])
 
 
 def plan_cadence(start: date, steps: Optional[list] = None, *, business_days_only: bool = True, holidays: Optional[List[date]] = None) -> List[Dict[str, Any]]:
