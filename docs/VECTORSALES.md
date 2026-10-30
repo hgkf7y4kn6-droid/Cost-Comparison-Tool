@@ -95,6 +95,11 @@ Ingesting 5,000 candidate accounts through filter→dedupe→merge with no provi
 laptop-class numbers, not a capacity guarantee.
 
 ## Choosing models: the evaluation harness
+**Not yet run against a real model.** The harness has only been exercised with scripted models (no provider key was
+available when it was built). To produce real numbers, set `VS_MODEL_CHEAP` / `VS_MODEL_STRONG` plus the provider's API key,
+give the harness per-token prices and a spending cap, and run `python -m vectorsales.evaluate`; until then no
+accuracy, cost or latency figure for any real model should be quoted.
+
 ```
 python -m vectorsales.evaluate triggers my_labelled_cases.json \
     --model gpt-4o-mini:0.15:0.60 --model gpt-4o:2.50:10.00 --max-usd 2 --dry-run   # estimate first

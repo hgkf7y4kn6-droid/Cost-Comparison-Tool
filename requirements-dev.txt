@@ -2,4 +2,5 @@ pytest
 httpx
 ruff
 bandit
-pip-audit
+# pip-audit needs tomli>=2.2.1 but crewai pins tomli~=2.0.2, so they cannot share an environment.
+# Run it isolated: pipx run pip-audit -r requirements.txt
