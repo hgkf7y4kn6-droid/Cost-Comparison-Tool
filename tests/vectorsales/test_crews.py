@@ -207,3 +207,18 @@ def test_router_from_env_disabled_without_models(monkeypatch):
 def test_telemetry_is_disabled_by_default():
     import os
     assert os.environ["CREWAI_DISABLE_TELEMETRY"].lower() == "true" and os.environ["OTEL_SDK_DISABLED"].lower() == "true"
+
+
+def test_inferred_persona_shapes_the_agent_prompt_and_is_stamped_by_the_engine_not_the_model():
+    store, led, ai, aid, cheap, strong = setup([GOOD_EMAIL], [GOOD_EMAIL])
+    cid = add_contact_and_trigger(store, aid)
+    store.add_persona_signal("t", aid, "email", "I'm frustrated, we still haven't heard back. This is unacceptable.", cid)
+    r = ai.draft_outreach("t", aid, cid, challenge="warehouse consolidation", resources=["https://acme-guides.example/routing"], priority=90)
+    prompt = strong.prompts[0]
+    assert "Empathic Problem-Solver" in prompt and "do not pitch" in prompt.lower() and "Never mention a profile" in prompt
+    assert r["status"] == "draft" and r["used_ai"] and r["draft"]["persona"] == "frustrated" and r["draft"]["agent_style"] == "empathic"
+    # a different persona is a different cache entry, so it is drafted again rather than reusing the neutral draft
+    store.add_persona_signal("t", aid, "email", "Actually, short on time. Just send the price asap.", cid)
+    store.add_persona_signal("t", aid, "note", "Very urgent, wants a quick answer right away.", cid)
+    ai.draft_outreach("t", aid, cid, step=2, challenge="warehouse consolidation", resources=["https://acme-guides.example/routing"], priority=90)
+    assert strong.calls == 2
