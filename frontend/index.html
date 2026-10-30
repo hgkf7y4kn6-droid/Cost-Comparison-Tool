@@ -369,7 +369,9 @@
       </div>
       <div class="xcard-body">
       <form id="compare-form">
-        <input type="file" id="compare-file" accept=".png,.jpg,.jpeg,.webp,.pdf,.xlsx,.xls" required>
+        <input type="file" id="compare-file" accept=".png,.jpg,.jpeg,.webp,.pdf,.xlsx,.xls" aria-label="Competitor product file">
+        <label class="muted" for="compare-photo">or take a photo of the product (phones)</label>
+        <input type="file" id="compare-photo" accept="image/*" capture="environment">
         <input type="number" id="competitor-uses" min="0" step="any"
                placeholder="Competitor uses per case (optional, enables cost-per-use)">
         <button type="submit" class="btn green">Run Cost Comparison</button>
@@ -888,21 +890,21 @@
     </form>
   </div>
 
-  <script src="config.js"></script>
-  <script src="store.js"></script>
-  <script src="cards.js"></script>
-  <script src="auth.js"></script>
-  <script src="tabs.js"></script>
-  <script src="app.js"></script>
-  <script src="prospecting.js"></script>
-  <script src="catalog.js"></script>
-  <script src="quotes.js"></script>
-  <script src="orders.js"></script>
-  <script src="accounts.js"></script>
-  <script src="sync.js"></script>
-  <script src="deal.js"></script>
-  <script src="today.js"></script>
-  <script src="map.js"></script>
-  <script src="drawers.js"></script>
+  <script defer src="config.js"></script>
+  <script defer src="store.js"></script>
+  <script defer src="cards.js"></script>
+  <script defer src="auth.js"></script>
+  <script defer src="tabs.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="prospecting.js"></script>
+  <script defer src="catalog.js"></script>
+  <script defer src="quotes.js"></script>
+  <script defer src="orders.js"></script>
+  <script defer src="accounts.js"></script>
+  <script defer src="sync.js"></script>
+  <script defer src="deal.js"></script>
+  <script defer src="today.js"></script>
+  <script defer src="map.js"></script>
+  <script defer src="drawers.js"></script>
 </body>
 </html>

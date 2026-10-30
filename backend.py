@@ -2,6 +2,7 @@ import io
 import json
 import os
 import re
+import sys
 import tempfile
 import uuid
 from datetime import datetime
@@ -289,6 +290,8 @@ async def require_sign_in(request: Request, call_next):
 # needs CORS. ALLOWED_ORIGINS is a comma-separated list, e.g.
 # "https://cost-comparison-tool.example.workers.dev"; "*" allows any origin.
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+if "*" in ALLOWED_ORIGINS:
+    print("WARNING: ALLOWED_ORIGINS is '*'; set it to your frontend URL(s) before real customer data.", file=sys.stderr)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

@@ -95,7 +95,13 @@ $("compare-form").addEventListener("submit", (e) => {
   e.preventDefault();
   $("compare-error").textContent = "";
   withBusy(e.target, async () => {
-    const fd = fileForm("compare-file");
+    const picked = $("compare-photo").files[0] || $("compare-file").files[0];
+    if (!picked) {
+      $("compare-error").textContent = "Choose a file or take a photo first.";
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", picked);
     const uses = $("competitor-uses").value.trim();
     if (uses) fd.append("competitor_uses_per_case", uses);
 
