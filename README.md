@@ -240,8 +240,14 @@ rows (row-level security), so a bug in the app can't leak across customers.
 - `records_pg.py` — the Postgres store (per-org, row-level security).
 - `migrations/` — Postgres schema.  `scripts/` — one-off tools.
 - `table_extract.py` — Excel/PDF → rows for lead import.
-- `backend.py` — FastAPI backend (CLIP + FAISS matching, OCR, report generation).
-  Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`).
+- `backend.py` — the FastAPI app: middleware (sign-in check, CORS, gzip), routers, static web app.
+  Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`). The work lives in:
+  - `routes_*.py` — one router per area (`auth`, `records`, `catalog`, `leads`, `compare`, `analysis`).
+  - `deps.py` — the sign-in service and the shared-records store (SQLite or Postgres).
+  - `engine.py` — CLIP + FAISS matching, the learned-feedback store, tier resolution.
+  - `extraction.py` — price/text extraction (no ML dependencies, easy to unit test).
+  - `comparison.py`, `analysis.py`, `excel_style.py` — Excel/Word report builders.
+  - `config.py` — shared paths and constants.
 - `frontend/` — static HTML/JS frontend. Deployed to **Cloudflare** as static
   assets (`wrangler.jsonc`). It calls the backend at the URL in `frontend/config.js`.
 
