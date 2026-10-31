@@ -29,10 +29,10 @@ def test_wiring_matches_golden_snapshot(backend):
 
 
 def test_cors_stays_outside_sign_in_check(backend):
-    """Registration order = inner to outer: sign-in check first, then CORS, then gzip,
-    so 401s and preflights still carry CORS headers."""
+    """Registration order = inner to outer: sign-in check first, then CORS, then gzip, then the web_headers
+    layer, so 401s and preflights still carry CORS and security headers."""
     names = [m[0] for m in backend.app.stack]
-    assert names == ["@middleware(http)", "CORSMiddleware", "GZipMiddleware"]
+    assert names == ["@middleware(http)", "CORSMiddleware", "GZipMiddleware", "@middleware(http)"]
 
 
 def test_every_route_but_health_login_and_static_requires_sign_in(backend):

@@ -1,11 +1,10 @@
 // Where the API lives (no trailing slash).
-// When the backend serves this page itself (Render, or `uvicorn` locally on
-// port 8000), the API is on the same address. A separate static host (e.g.
-// Cloudflare) calls the Render service.
-window.API_BASE =
-  location.origin === "https://cost-comparison-tool.onrender.com" || location.port === "8000"
-    ? ""
-    : "https://cost-comparison-tool.onrender.com";
+// The backend serves this page itself (Render, your own domain pointed at
+// Render, or `uvicorn` locally), so by default the API is on the same address
+// as the page: "" means "this site". Only a separate static host (Cloudflare
+// Workers/Pages) needs the backend's full address.
+const STATIC_HOST_API = "https://cost-comparison-tool.onrender.com";
+window.API_BASE = /\.(workers|pages)\.dev$/.test(location.hostname) ? STATIC_HOST_API : "";
 
 // Google Maps Platform browser key for the Prospecting map and the "Add from
 // Google Maps" business search. Create it in Google Cloud with the Maps

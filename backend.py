@@ -56,10 +56,12 @@ async def require_sign_in(request: Request, call_next):
     return await call_next(request)
 
 
-# The frontend is served from a different origin (Cloudflare), so the browser
-# needs CORS. ALLOWED_ORIGINS is a comma-separated list, e.g.
-# "https://cost-comparison-tool.example.workers.dev"; "*" allows any origin.
-ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+# The web app normally comes from this same service (its own domain or the
+# Render URL), which needs no CORS. Only a frontend on a different origin
+# (e.g. Cloudflare) does: ALLOWED_ORIGINS is a comma-separated list such as
+# "https://cost-comparison-tool.example.workers.dev". Unset means same-origin
+# only; "*" allows any origin.
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 if "*" in ALLOWED_ORIGINS:
     print("WARNING: ALLOWED_ORIGINS is '*'; set it to your frontend URL(s) before real customer data.", file=sys.stderr)
 app.add_middleware(
@@ -71,6 +73,30 @@ app.add_middleware(
 app.mount("/reports", StaticFiles(directory=REPORTS_DIR), name="reports")
 # Compress API responses and the web app's files (JS/CSS/JSON shrink ~70-80%).
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+# Registered last, so it is the outermost layer and every response gets these,
+# including 401s and CORS preflights.
+FRONTEND_SUFFIXES = (".html", ".js", ".css")
+
+
+@app.middleware("http")
+async def web_headers(request: Request, call_next):
+    response = await call_next(request)
+    h = response.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # Nobody can frame the app (clickjacking).
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
+    # Behind Render's HTTPS proxy (uvicorn --proxy-headers): browsers stick to HTTPS.
+    if request.url.scheme == "https":
+        h.setdefault("Strict-Transport-Security", "max-age=31536000")
+    # The page and its scripts revalidate on each load, so a deploy shows up
+    # right away instead of mixing old and new files.
+    path = request.url.path
+    if request.method in ("GET", "HEAD") and (path == "/" or path.endswith(FRONTEND_SUFFIXES)):
+        h.setdefault("Cache-Control", "no-cache")
+    return response
 
 for _routes in (routes_auth, routes_records, routes_catalog, routes_leads, routes_compare, routes_analysis):
     app.include_router(_routes.router)
