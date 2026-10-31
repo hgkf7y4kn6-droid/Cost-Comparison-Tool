@@ -7,10 +7,13 @@ services:
     plan: standard
     healthCheckPath: /health
     envVars:
-      # Set to your Cloudflare frontend URL once it's deployed, e.g.
+      # The web app is served by this service, on your domain and on the
+      # .onrender.com URL, which needs no CORS. Set this only if you also run the
+      # frontend somewhere else (e.g. Cloudflare), to that site's address:
       # https://cost-comparison-tool.<your-subdomain>.workers.dev
+      # Left unset, only same-site requests are allowed.
       - key: ALLOWED_ORIGINS
-        value: "*"
+        sync: false
       - key: DATA_DIR
         value: /var/data
       # Signs sign-in tokens. Render generates a random value once; keep it

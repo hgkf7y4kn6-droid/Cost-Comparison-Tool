@@ -1,0 +1,14 @@
+# Light dependencies the test suite imports. The heavy ones (fastapi, torch, faiss,
+# transformers) are replaced by stand-ins in tests/wiring.py, so CI stays fast.
+pytest
+psycopg[binary]
+starlette
+pydantic
+numpy
+pandas
+openpyxl
+xlrd
+pdfplumber
+python-docx
+Pillow
+pytesseract

@@ -214,17 +214,50 @@ Google's terms limit how long you may keep data copied from Google Maps
 (place details and coordinates). The lead keeps Google's place ID; review
 Google Maps Platform terms before relying on stored copies long-term.
 
+## Postgres and organizations (multi-tenant)
+Shared accounts and leads can live in Postgres instead of SQLite. Every row
+belongs to an organization and the database itself hides other organizations'
+rows (row-level security), so a bug in the app can't leak across customers.
+- `migrations/001_init.sql` — orgs, memberships, records and the append-only,
+  hash-chained `deal_events` timeline. Apply it as the database owner:
+  `psql "$ADMIN_URL" -v ON_ERROR_STOP=1 -f migrations/001_init.sql`, then give
+  the app role a login: `ALTER ROLE vectorsales_app LOGIN PASSWORD '...'`.
+- Set `DATABASE_URL` on the backend (connect as `vectorsales_app`, never as the
+  owner: owners bypass row-level security unless forced, and superusers always do).
+  Without it, records stay in SQLite as before. Users who aren't members of an
+  organization are refused.
+- `scripts/sqlite_to_postgres.py` converts an existing `sales_hub.db` into SQL
+  (see its header). It reads the file read-only, prints SQL for review, and is
+  safe to re-run.
+- Quotes, the item catalog and settings still live in each browser; moving them
+  is the next step.
+- Tests: `TEST_PG_ADMIN="host=localhost user=postgres" pytest tests` also runs the
+  Postgres checks (needs `psql`; install `psycopg[binary]` for the store tests).
+
 ## Project layout
 - `auth.py` — sign-in: password hashing, signed session tokens, lockout.
-- `accounts_store.py` — shared accounts and who may see/edit them.
+- `accounts_store.py` — shared accounts, who may see/edit them (SQLite store + the permission rules both stores share).
+- `records_pg.py` — the Postgres store (per-org, row-level security).
+- `migrations/` — Postgres schema.  `scripts/` — one-off tools.
 - `table_extract.py` — Excel/PDF → rows for lead import.
-- `backend.py` — FastAPI backend (CLIP + FAISS matching, OCR, report generation).
-  Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`).
-- `frontend/` — static HTML/JS frontend. Deployed to **Cloudflare** as static
-  assets (`wrangler.jsonc`). It calls the backend at the URL in `frontend/config.js`.
+- `backend.py` — the FastAPI app: middleware (sign-in check, CORS, gzip), routers, static web app.
+  Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`). The work lives in:
+  - `routes_*.py` — one router per area (`auth`, `records`, `catalog`, `leads`, `compare`, `analysis`).
+  - `deps.py` — the sign-in service and the shared-records store (SQLite or Postgres).
+  - `engine.py` — CLIP + FAISS matching, the learned-feedback store, tier resolution.
+  - `extraction.py` — price/text extraction (no ML dependencies, easy to unit test).
+  - `comparison.py`, `analysis.py`, `excel_style.py` — Excel/Word report builders.
+  - `config.py` — shared paths and constants.
+- `frontend/` — the static HTML/JS web app. The backend serves it at `/`, so the
+  whole product runs from one service. It calls the API on the same address it was
+  loaded from (`frontend/config.js`).
 
 ## Deploy
-### 1. Backend on Render
+The backend serves the web app itself, so one Render service is the whole
+product. Put it on your own domain or subdomain (e.g. `sales.yourcompany.com`) in
+section 2. The separate Cloudflare frontend (section 4) is optional.
+
+### 1. Service on Render
 1. In Render, choose **New → Blueprint** and select this repo. Render reads
    `render.yaml` and builds the `Dockerfile` (Tesseract and the CLIP model are
    baked into the image).
@@ -232,16 +265,47 @@ Google Maps Platform terms before relying on stored copies long-term.
    RAM and will run out of memory on free/starter instances.
 3. A 1 GB persistent disk is mounted at `/var/data` (`DATA_DIR`) so learned
    feedback and generated reports survive restarts/redeploys.
-4. Once it's live, note its URL (e.g. `https://cost-comparison-backend.onrender.com`)
-   and check `https://<that-url>/health` returns `{"status": "ok"}`.
+4. Set `AUTH_USERS` (and `AUTH_MANAGERS`) in the dashboard — see
+   [Sign-in](#sign-in-required). Until `AUTH_USERS` is set, every API call is refused.
+5. Check `https://<service>.onrender.com/health` returns `{"status": "ok"}`, then
+   open `https://<service>.onrender.com/` and sign in.
 
-### 2. Frontend on Cloudflare
-1. Put the Render URL in `frontend/config.js` (`window.API_BASE = "..."`) and push.
-2. Cloudflare's deploy command stays `npx wrangler deploy`; no build command is
+### 2. Your domain or subdomain
+1. In the Render service: **Settings → Custom Domains → Add Custom Domain**, and
+   enter e.g. `sales.yourcompany.com` (or `yourcompany.com`).
+2. At your DNS provider, add the record Render shows:
+   - **Subdomain** (`sales.yourcompany.com`): a `CNAME` from `sales` to
+     `<service>.onrender.com`.
+   - **Root domain** (`yourcompany.com`): an `ALIAS`/`ANAME` (or a flattened `CNAME`)
+     to `<service>.onrender.com`, or the `A` record Render lists if your provider
+     has neither.
+   - DNS on **Cloudflare**: set the record to **DNS only** (grey cloud) so Render
+     can verify the domain and issue its certificate.
+   - Remove any old `A`/`AAAA` records for the same name; they conflict.
+3. Back in Render, click **Verify**. Render issues the HTTPS certificate
+   automatically (usually a few minutes after DNS resolves). Nothing in the code
+   changes: the app calls the API on whatever address it is opened from, and sends
+   HSTS and other security headers over HTTPS.
+4. If you use the map, add the new address to the Google Maps key's allowed
+   websites (HTTP referrers), e.g. `https://sales.yourcompany.com/*`.
+5. Give people the new address. Sign-ins don't carry over from the
+   `.onrender.com` address (each site keeps its own), so everyone signs in once.
+
+### 3. Before real customer data
+- `AUTH_SECRET` is set (the Blueprint generates one) and stays stable.
+- `ALLOWED_ORIGINS` is unset unless you use section 4. Unset means only the app's
+  own site can call the API.
+- Shared records live on the persistent disk (SQLite). For Postgres, see
+  [Postgres and organizations](#postgres-and-organizations-multi-tenant).
+
+### 4. Optional: separate frontend on Cloudflare
+1. Cloudflare's deploy command stays `npx wrangler deploy`; no build command is
    needed. `wrangler.jsonc` points it at `./frontend`. Make sure `"name"` in
    `wrangler.jsonc` matches your Cloudflare Worker's name.
-3. Optionally lock CORS down: in Render set `ALLOWED_ORIGINS` to your Cloudflare
-   URL (comma-separate multiple origins) instead of `*`.
+2. On `*.workers.dev`/`*.pages.dev` the app calls the Render service at
+   `STATIC_HOST_API` in `frontend/config.js`; set that to your Render URL.
+3. In Render, set `ALLOWED_ORIGINS` to the Cloudflare URL (comma-separate
+   multiple origins).
 
 ## Run locally
 ```
@@ -258,8 +322,7 @@ OCR (for reading prices off photos/scanned PDFs) needs the Tesseract binary:
 
 Or run the same container Render uses: `docker build -t ob-backend . && docker run -p 8000:8000 ob-backend`.
 
-Then serve the frontend (with `window.API_BASE = "http://localhost:8000"` in
-`frontend/config.js`): `npx wrangler dev` or `python -m http.server -d frontend 8080`.
+Then open http://localhost:8000 — the backend serves the web app too.
 
 ## Catalog format
 Upload via the app or `POST /catalog/upload/`. Required columns:
