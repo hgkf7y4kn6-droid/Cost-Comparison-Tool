@@ -147,3 +147,17 @@ Below-7 fixes: Phase 0 (architecture, reliability), 2 (security, scalability, co
 Publish the full blueprint (now 42 deliverables incl. design system spec, performance budgets, accessibility strategy, mobile journeys) to the VectorSales project, then start Phase 0.
 
 Sources: [GeekWire — Highspot/Seismic](https://geekwire.com/2026/seattle-based-highspot-is-merging-with-rival-seismic-in-major-sales-software-deal) · [Showpad DSR comparison](https://www.showpad.com/blog/best-digital-sales-room-platforms-a-ranked-comparison-2026) · [Prospeo MAP tools](https://prospeo.io/s/mutual-action-plan-software) · [LangChain/LangGraph 1.0](https://www.langchain.com/blog/langchain-langgraph-1dot0) · [CrewAI docs](https://docs.crewai.com/en/introduction.md)
+
+---
+
+## Progress log
+
+| Item | Status | Branch |
+|---|---|---|
+| Phase 0: tests, CI, camera capture, deferred scripts | Done | `phase-0-safety-net` |
+| Phase 2 (part 1): Postgres schema with orgs + row-level security, hash-chained `deal_events`, `PostgresRecordStore`, SQLite importer | Done for accounts/leads only | `phase-2-postgres` |
+| `backend.py` split into modules (no behavior change) | Done | `phase-2-backend-split` |
+
+**Still open in Phase 2:** quotes, item catalog and settings still live in each browser; sign-in still uses the `AUTH_USERS` env var (no managed auth/MFA yet; no Supabase project has been created); object storage, background worker, and the Hugging Face embedding benchmark are not started; nothing writes to `deal_events` yet; `ALLOWED_ORIGINS` is still `*`.
+
+**Verification status:** schema, row-level security, tamper detection and the importer were tested against a real Postgres 16. The Postgres store's control flow was tested with a fake driver; it has **not yet been run against the real `psycopg` driver** (the build sandbox cannot reach PyPI), so CI is its first real run. The module split was verified by a route/middleware snapshot taken before the move and a body-for-body comparison of all 37 original definitions, but the real app (fastapi, torch, faiss) has not been booted since; run a deploy preview before merging.

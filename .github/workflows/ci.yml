@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install test dependencies
-        run: pip install pytest "psycopg[binary]"
+        run: pip install -r requirements-test.txt
       - name: Backend tests (SQLite and Postgres)
         run: python -m pytest tests -q -rs
       - name: Frontend syntax check

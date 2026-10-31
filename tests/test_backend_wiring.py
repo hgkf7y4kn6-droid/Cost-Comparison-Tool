@@ -3,7 +3,10 @@ import os
 
 import pytest
 
-import wiring
+for _lib in ("starlette", "pydantic", "numpy", "pandas", "openpyxl", "pdfplumber", "docx", "PIL"):
+    pytest.importorskip(_lib)
+
+import wiring  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GOLDEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden_wiring.json")
