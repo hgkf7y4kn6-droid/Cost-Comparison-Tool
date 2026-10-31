@@ -1,3 +1,7 @@
+import os
+import subprocess
+import uuid
+
 import pytest
 
 from accounts_store import RecordStore, limited_view, order_spend, ytd_spend
@@ -9,9 +13,40 @@ def order(amount, date=f"{YEAR}-03-01"):
     return {"date": date, "lines": [{"qty": 1, "unitPrice": amount}]}
 
 
-@pytest.fixture
-def store(tmp_path):
-    return RecordStore(str(tmp_path / "t.db"))
+PG_ADMIN = os.environ.get("TEST_PG_ADMIN")
+MIGRATION = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations", "001_init.sql")
+
+
+def _psql(conninfo, sql=None, file=None):
+    cmd = ["psql", conninfo, "-X", "-q", "-v", "ON_ERROR_STOP=1"] + (["-f", file] if file else ["-c", sql])
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def store(request, tmp_path):
+    """Every permission test runs against both stores: behavior must be identical."""
+    if request.param == "sqlite":
+        yield RecordStore(str(tmp_path / "t.db"))
+        return
+    psycopg = pytest.importorskip("psycopg")
+    if not PG_ADMIN:
+        pytest.skip("TEST_PG_ADMIN not set")
+    from psycopg.conninfo import make_conninfo
+    from records_pg import PostgresRecordStore
+
+    name = "vs_rec_" + uuid.uuid4().hex[:10]
+    _psql(PG_ADMIN, f"create database {name}")
+    admin_db = make_conninfo(PG_ADMIN, dbname=name)
+    try:
+        _psql(admin_db, file=MIGRATION)
+        org = str(uuid.uuid4())
+        _psql(admin_db, f"insert into orgs (id, name) values ('{org}', 'T');"
+                        + "".join(f"insert into memberships (email, org_id) values ('{e}', '{org}');"
+                                  for e in ("ana@x.com", "raj@x.com", "boss@x.com", "a@x.com")))
+        _psql(PG_ADMIN, "alter role vectorsales_app login password 'test'")
+        yield PostgresRecordStore(make_conninfo(admin_db, user="vectorsales_app", password="test"))
+    finally:
+        _psql(PG_ADMIN, f"drop database {name} with (force)")
 
 
 def test_order_spend_uses_shipped_qty_and_ignores_tax_freight():

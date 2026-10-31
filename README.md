@@ -214,9 +214,31 @@ Google's terms limit how long you may keep data copied from Google Maps
 (place details and coordinates). The lead keeps Google's place ID; review
 Google Maps Platform terms before relying on stored copies long-term.
 
+## Postgres and organizations (multi-tenant)
+Shared accounts and leads can live in Postgres instead of SQLite. Every row
+belongs to an organization and the database itself hides other organizations'
+rows (row-level security), so a bug in the app can't leak across customers.
+- `migrations/001_init.sql` — orgs, memberships, records and the append-only,
+  hash-chained `deal_events` timeline. Apply it as the database owner:
+  `psql "$ADMIN_URL" -v ON_ERROR_STOP=1 -f migrations/001_init.sql`, then give
+  the app role a login: `ALTER ROLE vectorsales_app LOGIN PASSWORD '...'`.
+- Set `DATABASE_URL` on the backend (connect as `vectorsales_app`, never as the
+  owner: owners bypass row-level security unless forced, and superusers always do).
+  Without it, records stay in SQLite as before. Users who aren't members of an
+  organization are refused.
+- `scripts/sqlite_to_postgres.py` converts an existing `sales_hub.db` into SQL
+  (see its header). It reads the file read-only, prints SQL for review, and is
+  safe to re-run.
+- Quotes, the item catalog and settings still live in each browser; moving them
+  is the next step.
+- Tests: `TEST_PG_ADMIN="host=localhost user=postgres" pytest tests` also runs the
+  Postgres checks (needs `psql`; install `psycopg[binary]` for the store tests).
+
 ## Project layout
 - `auth.py` — sign-in: password hashing, signed session tokens, lockout.
-- `accounts_store.py` — shared accounts and who may see/edit them.
+- `accounts_store.py` — shared accounts, who may see/edit them (SQLite store + the permission rules both stores share).
+- `records_pg.py` — the Postgres store (per-org, row-level security).
+- `migrations/` — Postgres schema.  `scripts/` — one-off tools.
 - `table_extract.py` — Excel/PDF → rows for lead import.
 - `backend.py` — FastAPI backend (CLIP + FAISS matching, OCR, report generation).
   Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`).

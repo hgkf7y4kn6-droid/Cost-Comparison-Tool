@@ -504,7 +504,14 @@ async def who_am_i(request: Request):
 # ==========================================
 # 4c. SHARED RECORDS: accounts and leads (see accounts_store.py for who sees what)
 # ==========================================
-record_store = RecordStore(os.path.join(os.environ.get("DATA_DIR", tempfile.gettempdir()), "sales_hub.db"))
+# DATABASE_URL (a Postgres connection string for the vectorsales_app role) switches
+# the shared records to Postgres with per-org isolation; otherwise they stay in SQLite.
+if os.environ.get("DATABASE_URL"):
+    from records_pg import PostgresRecordStore
+
+    record_store = PostgresRecordStore(os.environ["DATABASE_URL"])
+else:
+    record_store = RecordStore(os.path.join(os.environ.get("DATA_DIR", tempfile.gettempdir()), "sales_hub.db"))
 
 
 def _record_call(fn, *args):

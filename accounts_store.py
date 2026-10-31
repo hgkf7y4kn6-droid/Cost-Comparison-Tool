@@ -80,6 +80,52 @@ def is_open(kind: str, data: Dict[str, Any]) -> bool:
     return kind == "leads" or ytd_spend(data) <= 0
 
 
+def full_record(kind: str, record_id: str, owner: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    out = {**data, "id": record_id, "ownerEmail": owner}
+    if kind == "accounts":
+        out["ytdSpend"] = ytd_spend(data)
+    return out
+
+
+def prepare_record(record_id: str, data: Any) -> Tuple[Dict[str, Any], str]:
+    """Validates an incoming record; returns (clean data, requested owner email).
+    Shared by every store so the rules can't drift apart."""
+    if not ID_RE.match(record_id or ""):
+        raise ValueError("Invalid record id.")
+    if not isinstance(data, dict):
+        raise ValueError("Record must be a JSON object.")
+    data = {k: v for k, v in data.items() if k not in ("id", "ytdSpend", "limited")}
+    requested_owner = str(data.pop("ownerEmail", "") or "").strip().lower()
+    if len(json.dumps(data)) > MAX_RECORD_BYTES:
+        raise ValueError("Record is too large.")
+    return data, requested_owner
+
+
+def resolve_owner(kind: str, existing: Optional[Tuple[str, Dict[str, Any]]], email: str,
+                  is_manager: bool, requested_owner: str) -> str:
+    """Who owns the record after this save, or PermissionError if the save isn't allowed.
+    `existing` is (owner, stored data) for an update, None for a new record."""
+    if not existing:
+        return requested_owner if (is_manager and requested_owner) else email
+    owner, before = existing
+    if owner != email and not is_manager and not is_open(kind, before):
+        raise PermissionError("Only the account's owner or a manager can change a customer account.")
+    if requested_owner and requested_owner != owner:
+        # Managers assign to anyone; others may only claim an open record for themselves.
+        if is_manager or (requested_owner == email and is_open(kind, before)):
+            return requested_owner
+    return owner
+
+
+def may_delete(owner: str, email: str, is_manager: bool) -> None:
+    if owner != email and not is_manager:
+        raise PermissionError("Only the record's owner or a manager can delete it.")
+
+
+def can_open(kind: str, owner: str, data: Dict[str, Any], email: str, is_manager: bool) -> bool:
+    return is_manager or owner == email or is_open(kind, data)
+
+
 class RecordStore:
     def __init__(self, path: str):
         self.path = path
@@ -109,12 +155,7 @@ class RecordStore:
         row = self.db.execute("SELECT owner, data FROM records WHERE kind = ? AND id = ?", (kind, record_id)).fetchone()
         return (row[0], json.loads(row[1])) if row else None
 
-    @staticmethod
-    def _full(kind: str, record_id: str, owner: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        out = {**data, "id": record_id, "ownerEmail": owner}
-        if kind == "accounts":
-            out["ytdSpend"] = ytd_spend(data)
-        return out
+    _full = staticmethod(full_record)
 
     def list_visible(self, kind: str, email: str, is_manager: bool) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """(full records the user may open and edit, limited views of the rest)."""
@@ -124,32 +165,15 @@ class RecordStore:
             rows = self.db.execute("SELECT id, owner, data FROM records WHERE kind = ? ORDER BY id", (kind,)).fetchall()
         for record_id, owner, raw in rows:
             data = json.loads(raw)
-            if is_manager or owner == email or is_open(kind, data):
+            if can_open(kind, owner, data, email, is_manager):
                 full.append(self._full(kind, record_id, owner, data))
             else:
                 limited.append(limited_view(record_id, data))
         return full, limited
 
     def _save_locked(self, kind: str, record_id: str, data: Dict[str, Any], email: str, is_manager: bool) -> Dict[str, Any]:
-        if not ID_RE.match(record_id or ""):
-            raise ValueError("Invalid record id.")
-        if not isinstance(data, dict):
-            raise ValueError("Record must be a JSON object.")
-        data = {k: v for k, v in data.items() if k not in ("id", "ytdSpend", "limited")}
-        requested_owner = str(data.pop("ownerEmail", "") or "").strip().lower()
-        if len(json.dumps(data)) > MAX_RECORD_BYTES:
-            raise ValueError("Record is too large.")
-        existing = self._row(kind, record_id)
-        if existing:
-            owner, before = existing
-            if owner != email and not is_manager and not is_open(kind, before):
-                raise PermissionError("Only the account's owner or a manager can change a customer account.")
-            if requested_owner and requested_owner != owner:
-                # Managers assign to anyone; others may only claim an open record for themselves.
-                if is_manager or (requested_owner == email and is_open(kind, before)):
-                    owner = requested_owner
-        else:
-            owner = requested_owner if (is_manager and requested_owner) else email
+        data, requested_owner = prepare_record(record_id, data)
+        owner = resolve_owner(kind, self._row(kind, record_id), email, is_manager, requested_owner)
         self.db.execute(
             "INSERT INTO records (kind, id, owner, data, updated_at) VALUES (?, ?, ?, ?, ?)"
             " ON CONFLICT(kind, id) DO UPDATE SET owner = excluded.owner, data = excluded.data, updated_at = excluded.updated_at",
@@ -186,8 +210,7 @@ class RecordStore:
             existing = self._row(kind, record_id)
             if not existing:
                 return False
-            if existing[0] != email and not is_manager:
-                raise PermissionError("Only the record's owner or a manager can delete it.")
+            may_delete(existing[0], email, is_manager)
             self.db.execute("DELETE FROM records WHERE kind = ? AND id = ?", (kind, record_id))
             self.db.commit()
         return True

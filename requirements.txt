@@ -13,3 +13,4 @@ pytesseract
 faiss-cpu
 torch
 transformers
+psycopg[binary]

@@ -20,7 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "from transformers import CLIPModel, CLIPProcessor; \
 m='openai/clip-vit-base-patch32'; CLIPModel.from_pretrained(m); CLIPProcessor.from_pretrained(m)"
 
-COPY backend.py table_extract.py auth.py accounts_store.py ./
+COPY backend.py table_extract.py auth.py accounts_store.py records_pg.py ./
+COPY migrations ./migrations
 # The web app, served by the backend at "/"
 COPY frontend ./frontend
 
