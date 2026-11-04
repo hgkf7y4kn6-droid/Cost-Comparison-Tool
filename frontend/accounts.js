@@ -616,6 +616,13 @@
     log,
     open: openAccount,
     current: () => openId,
+    // A new account made from outside the Accounts tab (business card scan): a prospect-stage
+    // account, so no onboarding checklist. Saves.
+    add: (fields) => {
+      const acct = newAccount({ status: "active", nextAction: "Follow up", nextActionDate: hub.addDays(hub.today(), 3), ...fields });
+      hub.save();
+      return acct;
+    },
     onboardingProgress,
     ONBOARDING_ACTION,
     ytdSpend,

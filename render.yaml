@@ -33,6 +33,8 @@ services:
       # note and pulls out the next action). Without it that button still fills
       # in the kind of touch and next action using simple rules. The note text
       # is sent to Anthropic when this is set. NOTES_AI_MODEL overrides the model.
+      # The same key also reads business card photos (Scan card); without it that
+      # falls back to Tesseract OCR. CARD_AI_MODEL overrides the vision model.
       - key: ANTHROPIC_API_KEY
         sync: false
     disk:

@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 import routes_analysis
 import routes_auth
+import routes_cards
 import routes_catalog
 import routes_compare
 import routes_leads
@@ -104,7 +105,7 @@ async def web_headers(request: Request, call_next):
         h.setdefault("Cache-Control", "no-cache")
     return response
 
-for _routes in (routes_auth, routes_records, routes_catalog, routes_leads, routes_notes, routes_compare, routes_analysis):
+for _routes in (routes_auth, routes_records, routes_cards, routes_catalog, routes_leads, routes_notes, routes_compare, routes_analysis):
     app.include_router(_routes.router)
 
 

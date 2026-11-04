@@ -59,6 +59,11 @@
   ],
   [
    "GET",
+   "/cards/status",
+   "scan_status"
+  ],
+  [
+   "GET",
    "/catalog/status/",
    "catalog_status"
   ],
@@ -96,6 +101,11 @@
    "POST",
    "/auth/login",
    "login"
+  ],
+  [
+   "POST",
+   "/cards/scan",
+   "scan_business_card"
   ],
   [
    "POST",

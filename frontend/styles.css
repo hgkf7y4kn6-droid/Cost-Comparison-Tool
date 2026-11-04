@@ -777,3 +777,19 @@ body.modal-open { overflow: hidden; }
 .ql-inbox-item .row-buttons input { flex: 1 1 14em; }
 @media (max-width: 700px) { .ql-fab span { display: none; } .ql-fab { padding: 0.9em; } }
 @media print { .ql-fab { display: none; } }
+
+/* ---------- Business card scan ---------- */
+.ql-scan { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 3.4em); background: var(--ink); color: var(--on-ink); }
+.ql-scan:hover { background: var(--ink-2); }
+.cs-capture { text-align: center; padding: 1.2em 0; }
+.cs-pick { display: inline-block; cursor: pointer; padding: 1em 1.6em; font-size: 1.05em; }
+.cs-file { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.cs-file:focus-visible + .hint, .cs-capture:focus-within .cs-pick { outline: 3px solid color-mix(in srgb, var(--brass) 40%, transparent); outline-offset: 2px; }
+.cs-top { display: flex; gap: 1em; align-items: flex-start; margin-bottom: 0.8em; }
+.cs-top > div { flex: 1; }
+.cs-preview { width: 9em; max-height: 6.5em; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.cs-match, .cs-kind { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.4em 0.9em 0.7em; margin: 0 0 0.8em; }
+.cs-match { border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: var(--warn-soft); }
+.cs-match legend, .cs-kind legend { font-weight: 600; padding: 0 0.4em; }
+.cs-match label, .cs-kind label { display: block; margin: 0.3em 0; }
+@media (max-width: 700px) { .ql-scan span { display: none; } .ql-scan { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 3.6em); } }

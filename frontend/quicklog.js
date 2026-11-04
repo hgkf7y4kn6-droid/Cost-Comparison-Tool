@@ -737,7 +737,7 @@
   setInterval(refreshInbox, INBOX_EVERY_MS);
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && refreshInbox());
 
-  hub.quicklog = { open: openDialog, refreshInbox };
+  hub.quicklog = { open: openDialog, refreshInbox, fileNote, normName, flash };
   setSignedIn(!!hub.auth);
   renderLeadNotes();
   if (hub.auth) refreshInbox();

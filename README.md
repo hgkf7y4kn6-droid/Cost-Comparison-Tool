@@ -185,6 +185,24 @@ lead and sync like everything else; an unsaved note is kept as a draft on that d
   a small SQLite file under `DATA_DIR` (`note_inbox.db`), even when records are in Postgres.
 - **Copy for CRM** — copies a paste-ready version of the note for a CRM that has no integration.
 
+## Scan a business card
+**Scan card** (bottom-right, above Log a touch) opens the phone camera (or a file picker on
+a computer), reads the card, and fills in a form — contact name, title, email, phone, mobile,
+website, company and address — for the rep to **check and correct before anything is saved**.
+The photo is not stored.
+
+- **Reading** (`POST /cards/scan`, `cards.py`): with `ANTHROPIC_API_KEY` set the photo is read by
+  Claude's vision (sent to Anthropic; `CARD_AI_MODEL` overrides the model), which copes with
+  stylised layouts. Without a key, or if that call fails, it falls back to Tesseract OCR (already
+  in the Docker image) plus pattern rules — less accurate, and the dialog says so. With neither,
+  the rep types the details with the photo shown for reference. Photos are shrunk to 1600px
+  in the browser first, and validated and re-encoded on the server.
+- **Saving**: as a **Lead** (default; a prospect) or an **Account**, with source "Business card".
+  If the company or email matches a record the rep already has, the form offers to add the contact
+  to it instead: blank contact fields are filled, a different person goes to *Other contacts*
+  (accounts) or the notes (leads), and nothing is overwritten. An optional "where did you meet"
+  line is logged as a meeting on the record.
+
 ## Sign-in (required)
 Every backend endpoint except `/health` and `/auth/login` requires a signed-in
 user, including report downloads under `/reports/`. The frontend shows a sign-in
@@ -276,6 +294,7 @@ rows (row-level security), so a bug in the app can't leak across customers.
 - `backend.py` — the FastAPI app: middleware (sign-in check, CORS, gzip), routers, static web app.
   Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`). The work lives in:
   - `routes_*.py` — one router per area (`auth`, `records`, `catalog`, `leads`, `notes`, `compare`, `analysis`).
+  - `cards.py` — business card photo → contact/company fields (AI vision, with an OCR + rules fallback).
   - `notes.py` — quick-note tidy-up (AI with a rules fallback) and the inbound-notes inbox.
   - `deps.py` — the sign-in service and the shared-records store (SQLite or Postgres).
   - `engine.py` — CLIP + FAISS matching, the learned-feedback store, tier resolution.
