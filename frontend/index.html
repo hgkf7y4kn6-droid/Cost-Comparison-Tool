@@ -61,6 +61,7 @@
         <li><button type="button" class="link-btn" id="start-profile">Add your details</button> — printed on every proposal.</li>
       </ol>
     </div>
+    <div id="today-inbox"></div>
     <div class="kpis" id="today-kpis" aria-live="polite"></div>
     <div class="today-grid" id="today-grid"></div>
   </div>
@@ -300,6 +301,19 @@
       </form>
       <p id="d-warning" class="notice" hidden></p>
       <p id="d-status" class="status ok" aria-live="polite"></p>
+
+      <div class="xcard" data-card="lead-activity">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Notes &amp; touches</h3><p class="xcard-sub">Calls, visits and meetings logged with “Log a touch”.</p></div>
+          <span class="xcard-aside" id="d-activity-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <button type="button" class="btn small primary" id="d-log-touch">Log a touch</button>
+          <p id="d-next-action" class="hint" hidden></p>
+          <ul id="d-activity" class="timeline"></ul>
+          <p id="d-no-activity" class="hint">Nothing logged yet.</p>
+        </div>
+      </div>
 
       <div class="xcard" data-card="lead-outreach">
         <div class="xcard-head">
@@ -872,6 +886,65 @@
     </div>
   </div>
 
+  <!-- Quick note capture: available from every tab once signed in -->
+  <button type="button" class="ql-fab" id="ql-fab" hidden aria-haspopup="dialog" title="Log a call, visit or meeting while it's fresh">
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12h-2z" fill="currentColor"/></svg>
+    <span>Log a touch</span>
+  </button>
+  <div id="quicklog" class="modal-backdrop" hidden>
+    <form class="modal ql-modal" id="ql-form" role="dialog" aria-modal="true" aria-labelledby="ql-title" novalidate>
+      <div class="picker-header">
+        <button type="button" class="link-btn picker-back" id="ql-close">‹ Close</button>
+        <div class="picker-heading"><strong id="ql-title" class="picker-title">Log a touch</strong><small class="muted">Capture it now — it syncs to the account or lead.</small></div>
+        <span class="picker-back" aria-hidden="true"></span>
+      </div>
+      <div class="modal-body">
+        <div class="grid-form">
+          <label class="span-2">Who was it with?
+            <input type="text" id="ql-who" list="ql-who-list" autocomplete="off" placeholder="Start typing a company…" required>
+            <datalist id="ql-who-list"></datalist>
+          </label>
+          <label>What kind <select id="ql-type"></select></label>
+          <label>Date <input type="date" id="ql-date"></label>
+        </div>
+        <div class="ql-notes">
+          <div class="ql-notes-head">
+            <label for="ql-text">Notes</label>
+            <span class="row-buttons">
+              <button type="button" class="btn small" id="ql-mic" aria-pressed="false">🎤 Dictate</button>
+              <button type="button" class="btn small" id="ql-ai">✨ Tidy with AI</button>
+            </span>
+          </div>
+          <textarea id="ql-text" rows="7" placeholder="Type, or tap Dictate and just talk: who you met, what they need, what you promised."></textarea>
+          <p class="ql-live" id="ql-live" aria-live="polite"></p>
+          <p class="hint" id="ql-hint"></p>
+        </div>
+        <div class="grid-form">
+          <label>Next action <input type="text" id="ql-next" placeholder="e.g. Send glove samples"></label>
+          <label>Due <input type="date" id="ql-next-date"></label>
+        </div>
+        <p id="ql-status" class="status" aria-live="polite"></p>
+        <div class="row-buttons">
+          <button type="submit" class="btn green" id="ql-save">Save note</button>
+          <button type="button" class="btn small" id="ql-save-more">Save &amp; log another</button>
+          <button type="button" class="btn small" id="ql-copy" title="Copy a paste-ready note for your own CRM">Copy for CRM</button>
+          <button type="button" class="btn small" id="ql-discard">Discard draft</button>
+        </div>
+        <details class="ql-connect" id="ql-connect">
+          <summary>Connect your tools (CRM, AI note-takers, Zapier)</summary>
+          <p class="hint">Anything that can send a web request can drop a note into your inbox on the Today tab, where you confirm which account it belongs to. Use it with Zapier or Make (HubSpot, Salesforce, Otter, Fireflies, Zoom AI summaries…), an iPhone Shortcut, or your own script.</p>
+          <div class="grid-form">
+            <label class="span-2">Web address (POST) <input type="text" id="ql-endpoint" readonly></label>
+            <label class="span-2">Your key <span class="row-buttons"><input type="password" id="ql-key" readonly autocomplete="off"><button type="button" class="btn small" id="ql-key-show">Show</button><button type="button" class="btn small" id="ql-key-copy">Copy</button></span>
+              <small class="muted">Send it as <code>Authorization: Bearer &lt;key&gt;</code>. It can only add notes to your inbox, and stops working if your password changes.</small></label>
+          </div>
+          <pre class="ql-sample" id="ql-sample"></pre>
+          <p class="hint" id="ql-ai-status"></p>
+        </details>
+      </div>
+    </form>
+  </div>
+
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
 
   <!-- Filled in and shown only when printing a proposal -->
@@ -903,6 +976,7 @@
   <script defer src="accounts.js"></script>
   <script defer src="sync.js"></script>
   <script defer src="deal.js"></script>
+  <script defer src="quicklog.js"></script>
   <script defer src="today.js"></script>
   <script defer src="map.js"></script>
   <script defer src="drawers.js"></script>

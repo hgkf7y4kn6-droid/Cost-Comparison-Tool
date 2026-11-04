@@ -44,6 +44,11 @@
  "routes": [
   [
    "DELETE",
+   "/notes/inbox/{item_id}",
+   "remove_from_inbox"
+  ],
+  [
+   "DELETE",
    "/records/{kind}/{record_id}",
    "delete_record"
   ],
@@ -66,6 +71,16 @@
    "GET",
    "/health",
    "health"
+  ],
+  [
+   "GET",
+   "/notes/inbox",
+   "list_inbox"
+  ],
+  [
+   "GET",
+   "/notes/integration",
+   "integration_info"
   ],
   [
    "GET",
@@ -106,6 +121,16 @@
    "POST",
    "/leads/parse/",
    "parse_lead_file"
+  ],
+  [
+   "POST",
+   "/notes/inbound",
+   "inbound"
+  ],
+  [
+   "POST",
+   "/notes/structure",
+   "structure"
   ],
   [
    "POST",

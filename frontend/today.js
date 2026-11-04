@@ -104,6 +104,17 @@
     const quotedLeads = new Set(state.quotes.map((q) => q.leadId).filter(Boolean));
 
     // Follow-ups: account next actions due within a week, overdue first.
+    const leadFollowUps = state.leads
+      .filter((l) => l.nextActionDate && l.nextActionDate <= week && !["won", "disqualified"].includes(l.stage)
+        && !state.accounts.some((a) => a.leadId === l.id))
+      .map((l) => ({ l, late: l.nextActionDate < today }))
+      .map(({ l, late }) => ({
+        title: l.company,
+        detail: `${l.nextAction || "Follow up"} — ${late ? `overdue since ${hub.fmtDate(l.nextActionDate)}` : l.nextActionDate === today ? "due today" : `due ${hub.fmtDate(l.nextActionDate)}`}`,
+        tone: late ? "late" : l.nextActionDate === today ? "soon" : "",
+        date: l.nextActionDate,
+        actions: [["Open lead", work("lead", l.id, () => hub.openLead(l.id)), true]],
+      }));
     const followUps = liveAccounts
       .filter((a) => a.nextActionDate && a.nextActionDate <= week)
       .sort((a, b) => a.nextActionDate.localeCompare(b.nextActionDate))
@@ -115,8 +126,11 @@
           tone: late ? "late" : a.nextActionDate === today ? "soon" : "",
           actions: [[a.status === "onboarding" ? "Onboarding" : "Open account",
             work("account", a.id, () => hub.accounts.open(a.id, { focus: a.status === "onboarding" ? "onboarding" : "" })), true]],
+          date: a.nextActionDate,
         };
-      });
+      })
+      .concat(leadFollowUps)
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     // Proposals out with the customer: expired, expiring, or quiet for a week.
     const waiting = openQuotes

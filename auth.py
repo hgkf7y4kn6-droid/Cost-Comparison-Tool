@@ -129,6 +129,28 @@ class Authenticator:
             return None
         return body
 
+    # --- Integration keys --------------------------------------------------------
+    # A per-user key for outside tools (CRM automations, AI note-takers) that can
+    # only post notes to /notes/inbound. Derived from the server secret and the
+    # user's password hash, so nothing is stored, and it stops working when the
+    # password changes or the user is removed.
+
+    def integration_key(self, email: str) -> str:
+        stored = self.users[email]
+        sig = hmac.new(self.secret, f"integration|{email}|{_fingerprint(stored)}".encode(), hashlib.sha256).digest()
+        return f"ik_{_b64(email.encode())}.{_b64(sig)}"
+
+    def verify_integration_key(self, key: str) -> Optional[str]:
+        """The user's email if the key is valid, else None."""
+        try:
+            head, _ = key.split(".")
+            email = _unb64(head[3:]).decode() if head.startswith("ik_") else ""
+        except (ValueError, TypeError, UnicodeDecodeError):
+            return None
+        if email not in self.users:
+            return None
+        return email if hmac.compare_digest(key, self.integration_key(email)) else None
+
     # --- Login with throttling -------------------------------------------------
 
     def _recent_failures(self, key: str, now: float) -> list:

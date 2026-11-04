@@ -1108,6 +1108,7 @@
     save();
     return lead;
   };
+  hub.currentLeadId = () => openId;
   hub.openLead = (id) => {
     window.showTab("prospecting");
     openLead(id);

@@ -40,6 +40,8 @@
     call: "Call",
     email: "Email",
     visit: "Site visit",
+    meeting: "In-person meeting",
+    virtual: "Virtual meeting",
     order: "Order",
     issue: "Issue / complaint",
     review: "Business review",
@@ -111,12 +113,14 @@
     return acct;
   }
 
-  function log(accountId, type, text, date, amount) {
+  function log(accountId, type, text, date, amount, extra) {
     const acct = findAccount(accountId);
     if (!acct) return;
     acct.activities = acct.activities || [];
     const entry = { id: hub.newId("act"), date: date || hub.today(), type, text };
     if (type === "order" && Number(amount) > 0) entry.amount = Math.round(Number(amount) * 100) / 100;
+    if (extra && extra.via) entry.via = String(extra.via).slice(0, 60); // how it was captured (dictated, integration…)
+    if (extra && extra.inboxId) entry.inboxId = String(extra.inboxId).slice(0, 40); // which inbox note this came from
     acct.activities.push(entry);
     acct.updated = new Date().toISOString();
   }
@@ -502,7 +506,7 @@
       const li = document.createElement("li");
       const when = document.createElement("span");
       when.className = "muted";
-      when.textContent = `${hub.fmtDate(a.date)} · ${ACTIVITY_TYPES[a.type] || a.type}`;
+      when.textContent = `${hub.fmtDate(a.date)} · ${ACTIVITY_TYPES[a.type] || a.type}${a.via ? ` · ${a.via}` : ""}`;
       const text = document.createElement("div");
       text.textContent = a.type === "order" && a.amount ? `${money(a.amount)} — ${a.text}` : a.text;
       const del = document.createElement("button");
@@ -611,6 +615,7 @@
     upsertFromQuote,
     log,
     open: openAccount,
+    current: () => openId,
     onboardingProgress,
     ONBOARDING_ACTION,
     ytdSpend,

@@ -29,6 +29,12 @@ services:
       # Emails (comma-separated) who can open and edit every account.
       - key: AUTH_MANAGERS
         sync: false
+      # Optional: turns on "Tidy with AI" for quick notes (rewrites a dictated
+      # note and pulls out the next action). Without it that button still fills
+      # in the kind of touch and next action using simple rules. The note text
+      # is sent to Anthropic when this is set. NOTES_AI_MODEL overrides the model.
+      - key: ANTHROPIC_API_KEY
+        sync: false
     disk:
       name: ob-data
       mountPath: /var/data

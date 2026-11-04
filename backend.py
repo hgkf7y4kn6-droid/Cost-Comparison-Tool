@@ -14,6 +14,7 @@ import routes_auth
 import routes_catalog
 import routes_compare
 import routes_leads
+import routes_notes
 import routes_records
 from config import REPORTS_DIR
 from deps import authenticator
@@ -49,7 +50,12 @@ async def require_sign_in(request: Request, call_next):
         )
     header = request.headers.get("authorization", "")
     token = header[7:].strip() if header.lower().startswith("bearer ") else ""
-    user = authenticator.verify_token(token) if token else None
+    if token.startswith("ik_"):
+        # Integration keys (CRM automations, AI note-takers) may only post notes.
+        email = authenticator.verify_integration_key(token) if request.url.path == "/notes/inbound" else None
+        user = {"sub": email} if email else None
+    else:
+        user = authenticator.verify_token(token) if token else None
     if not user:
         return JSONResponse({"detail": "Please sign in."}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
     request.state.user = user["sub"]
@@ -98,7 +104,7 @@ async def web_headers(request: Request, call_next):
         h.setdefault("Cache-Control", "no-cache")
     return response
 
-for _routes in (routes_auth, routes_records, routes_catalog, routes_leads, routes_compare, routes_analysis):
+for _routes in (routes_auth, routes_records, routes_catalog, routes_leads, routes_notes, routes_compare, routes_analysis):
     app.include_router(_routes.router)
 
 
