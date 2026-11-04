@@ -152,6 +152,57 @@ All Sales Hub data (leads, quotes, accounts) is stored in the browser's
 tab's **Export shown (CSV)** to back up or share; moving this data to a
 backend database is the next step for team-wide use.
 
+## Quick notes: log a touch right after the call
+The **Log a touch** button (bottom-right on every tab, and on each lead) lets a rep
+capture a call, site visit, in-person or virtual meeting while it is fresh, instead of
+typing it all up at the end of the day. Notes are saved as activities on the account or
+lead and sync like everything else; an unsaved note is kept as a draft on that device.
+
+- **Voice dictation** — the 🎤 button uses the browser's built-in speech recognition
+  (Chrome, Edge, Safari); no setup. Chrome and Safari send the audio to their own speech
+  service, which the dialog says. Where unsupported (e.g. Firefox) the button is hidden;
+  phone keyboards' own microphone key works in the same box.
+- **Tidy with AI** — `POST /notes/structure` rewrites a rambling note, guesses the kind
+  of touch and pulls out the next action and its date (shown on Today → Follow-ups, and
+  for leads in their Notes & touches card). Set `ANTHROPIC_API_KEY` on the server to turn
+  on the rewriting (`NOTES_AI_MODEL` overrides the model); the note text is sent to
+  Anthropic when it is set. Without it, or if the call fails, the same button fills in the
+  type and next action with simple rules and says so. Rewrites can be undone.
+- **CRM and AI note-taker integrations** — each rep has a key (Log a touch → *Connect
+  your tools*). Anything that can send a web request (Zapier/Make, HubSpot or Salesforce
+  workflows, Otter/Fireflies/Zoom summaries, an iPhone Shortcut) can post:
+  ```
+  curl -X POST https://YOUR-SITE/notes/inbound \
+    -H "Authorization: Bearer ik_…" -H "Content-Type: application/json" \
+    -d '{"company":"Acme Co","type":"call","date":"2026-11-04","notes":"…","source":"Otter"}'
+  ```
+  Fields: `notes` (required; also accepts `text`, `body`, `transcript`), `company`,
+  `email` (contact), `record_id`, `type` (`call|email|visit|meeting|virtual|issue|review|note`),
+  `date`, `source`. Notes land in a **Notes to file** inbox on the Today tab, pre-matched
+  by id, contact email or company name; the rep confirms the account/lead before anything is filed.
+  The key only works for `/notes/inbound`, is derived from `AUTH_SECRET` and the user's
+  password hash (nothing is stored), and stops working when the password changes. The inbox is
+  a small SQLite file under `DATA_DIR` (`note_inbox.db`), even when records are in Postgres.
+- **Copy for CRM** — copies a paste-ready version of the note for a CRM that has no integration.
+
+## Scan a business card
+**Scan card** (bottom-right, above Log a touch) opens the phone camera (or a file picker on
+a computer), reads the card, and fills in a form — contact name, title, email, phone, mobile,
+website, company and address — for the rep to **check and correct before anything is saved**.
+The photo is not stored.
+
+- **Reading** (`POST /cards/scan`, `cards.py`): with `ANTHROPIC_API_KEY` set the photo is read by
+  Claude's vision (sent to Anthropic; `CARD_AI_MODEL` overrides the model), which copes with
+  stylised layouts. Without a key, or if that call fails, it falls back to Tesseract OCR (already
+  in the Docker image) plus pattern rules — less accurate, and the dialog says so. With neither,
+  the rep types the details with the photo shown for reference. Photos are shrunk to 1600px
+  in the browser first, and validated and re-encoded on the server.
+- **Saving**: as a **Lead** (default; a prospect) or an **Account**, with source "Business card".
+  If the company or email matches a record the rep already has, the form offers to add the contact
+  to it instead: blank contact fields are filled, a different person goes to *Other contacts*
+  (accounts) or the notes (leads), and nothing is overwritten. An optional "where did you meet"
+  line is logged as a meeting on the record.
+
 ## Sign-in (required)
 Every backend endpoint except `/health` and `/auth/login` requires a signed-in
 user, including report downloads under `/reports/`. The frontend shows a sign-in
@@ -242,7 +293,9 @@ rows (row-level security), so a bug in the app can't leak across customers.
 - `table_extract.py` — Excel/PDF → rows for lead import.
 - `backend.py` — the FastAPI app: middleware (sign-in check, CORS, gzip), routers, static web app.
   Deployed to **Render** as a Docker service (`Dockerfile`, `render.yaml`). The work lives in:
-  - `routes_*.py` — one router per area (`auth`, `records`, `catalog`, `leads`, `compare`, `analysis`).
+  - `routes_*.py` — one router per area (`auth`, `records`, `catalog`, `leads`, `notes`, `compare`, `analysis`).
+  - `cards.py` — business card photo → contact/company fields (AI vision, with an OCR + rules fallback).
+  - `notes.py` — quick-note tidy-up (AI with a rules fallback) and the inbound-notes inbox.
   - `deps.py` — the sign-in service and the shared-records store (SQLite or Postgres).
   - `engine.py` — CLIP + FAISS matching, the learned-feedback store, tier resolution.
   - `extraction.py` — price/text extraction (no ML dependencies, easy to unit test).

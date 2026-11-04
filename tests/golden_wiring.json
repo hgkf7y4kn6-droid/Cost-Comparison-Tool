@@ -44,6 +44,11 @@
  "routes": [
   [
    "DELETE",
+   "/notes/inbox/{item_id}",
+   "remove_from_inbox"
+  ],
+  [
+   "DELETE",
    "/records/{kind}/{record_id}",
    "delete_record"
   ],
@@ -51,6 +56,11 @@
    "GET",
    "/auth/me",
    "who_am_i"
+  ],
+  [
+   "GET",
+   "/cards/status",
+   "scan_status"
   ],
   [
    "GET",
@@ -69,6 +79,16 @@
   ],
   [
    "GET",
+   "/notes/inbox",
+   "list_inbox"
+  ],
+  [
+   "GET",
+   "/notes/integration",
+   "integration_info"
+  ],
+  [
+   "GET",
    "/records/{kind}/",
    "list_records"
   ],
@@ -81,6 +101,11 @@
    "POST",
    "/auth/login",
    "login"
+  ],
+  [
+   "POST",
+   "/cards/scan",
+   "scan_business_card"
   ],
   [
    "POST",
@@ -106,6 +131,16 @@
    "POST",
    "/leads/parse/",
    "parse_lead_file"
+  ],
+  [
+   "POST",
+   "/notes/inbound",
+   "inbound"
+  ],
+  [
+   "POST",
+   "/notes/structure",
+   "structure"
   ],
   [
    "POST",
