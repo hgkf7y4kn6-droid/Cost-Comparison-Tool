@@ -37,6 +37,14 @@ services:
       # falls back to Tesseract OCR. CARD_AI_MODEL overrides the vision model.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Optional: moves shared accounts and leads from SQLite on the disk to
+      # Postgres (Neon), with per-organization row-level security. Use the
+      # vectorsales_app role's connection string, never the owner's:
+      # postgresql://vectorsales_app:...@ep-....neon.tech/neondb?sslmode=require
+      # Add the organization and its members first (README, "Neon"), or every
+      # sign-in is refused. Leave unset to keep using SQLite.
+      - key: DATABASE_URL
+        sync: false
     disk:
       name: ob-data
       mountPath: /var/data

@@ -285,6 +285,36 @@ rows (row-level security), so a bug in the app can't leak across customers.
 - Tests: `TEST_PG_ADMIN="host=localhost user=postgres" pytest tests` also runs the
   Postgres checks (needs `psql`; install `psycopg[binary]` for the store tests).
 
+### Neon
+The hosted database is a Neon project, `cost-comparison-tool` (AWS us-west-2,
+next to Render's Oregon region, Postgres 17). `001_init.sql` is applied and
+`vectorsales_app` has a login. To set up another Neon project the same way:
+1. Create the project, then run `001_init.sql` as the owner (`neondb_owner`), in
+   the Neon SQL editor or with `psql "<owner connection string>" -v ON_ERROR_STOP=1 -f migrations/001_init.sql`.
+2. Give the app role a login **in SQL**, with a long random password:
+   `ALTER ROLE vectorsales_app LOGIN PASSWORD '...';`
+   Don't create or reset this role in the Neon console or API: roles made there
+   join `neon_superuser`, which bypasses row-level security. Check with
+   `select rolbypassrls from pg_roles where rolname = 'vectorsales_app';` (must be false).
+3. Add the organization and everyone who signs in (emails as in `AUTH_USERS`),
+   as the owner:
+   ```sql
+   with o as (insert into orgs (name) values ('Office Basics') returning id)
+   insert into memberships (email, org_id, role)
+   select e.email, o.id, e.role from o, (values
+     ('boss@example.com', 'manager'),
+     ('ana@example.com', 'rep')) as e(email, role);
+   ```
+   Moving existing SQLite records instead? Use `scripts/sqlite_to_postgres.py`,
+   which creates the org and members too.
+4. Set `DATABASE_URL` on Render to
+   `postgresql://vectorsales_app:<password>@<endpoint host>/neondb?sslmode=require&channel_binding=require`
+   (the direct host, not `-pooler`). Render restarts the service; records now come
+   from Neon. Unset it to go back to SQLite (the SQLite file is left untouched).
+
+Neon scales the database to zero when idle, so the first request after a quiet
+spell waits a second or so while it wakes.
+
 ## Project layout
 - `auth.py` — sign-in: password hashing, signed session tokens, lockout.
 - `accounts_store.py` — shared accounts, who may see/edit them (SQLite store + the permission rules both stores share).
@@ -348,7 +378,7 @@ section 2. The separate Cloudflare frontend (section 4) is optional.
 - `AUTH_SECRET` is set (the Blueprint generates one) and stays stable.
 - `ALLOWED_ORIGINS` is unset unless you use section 4. Unset means only the app's
   own site can call the API.
-- Shared records live on the persistent disk (SQLite). For Postgres, see
+- Shared records live on the persistent disk (SQLite) unless `DATABASE_URL` points at Neon; see
   [Postgres and organizations](#postgres-and-organizations-multi-tenant).
 
 ### 4. Optional: separate frontend on Cloudflare
