@@ -204,10 +204,17 @@ The photo is not stored.
   line is logged as a meeting on the record.
 
 ## Find customers (Google Maps + Apollo)
-**Prospecting → Find customers** builds a target list the way VectorSales' `prospecting/build_list.py` does,
-adapted to the businesses an office-supplies rep sells to (professional offices, medical and dental
-practices, property managers, manufacturers and warehouses, schools, nonprofits, staffing and tech offices,
-hotels and fitness):
+**Prospecting → Find customers** builds a target list the way VectorSales' `prospecting/build_list.py` does, focused
+on the four product lines the rep sells. Pick one:
+
+| Product line | Who it searches for | Buyer Apollo looks for |
+|---|---|---|
+| **Janitorial supplies** | facility-heavy sites: clinics, schools, hotels, warehouses, fitness centers, senior living, property managers, churches | facilities / building / operations / purchasing manager |
+| **Commercial furniture projects** | companies likely to buy a project: architects, interior designers, contractors, coworking, developers, senior living, charter schools, medical offices | facilities director, office manager, workplace experience, project manager, owner |
+| **Branded & promotional products** | banks and credit unions, breweries, nonprofits, sports clubs, franchises, associations, colleges | marketing, communications, events, development |
+| **Purchased uniforms & work apparel** | HVAC, plumbing, electrical, landscaping, auto repair, restaurants, security and cleaning companies | owner, operations/general manager, HR, fleet, purchasing |
+
+Leads are filed under the matching product interest, so the outreach draft, contact titles and cross-sell gaps follow it.
 
 1. **Discover** — Google Places text search around the chosen area (Philadelphia & suburbs, South Jersey,
    Central NJ, Lehigh Valley, Lancaster), plus Apollo's organization search filtered to your headcount range.

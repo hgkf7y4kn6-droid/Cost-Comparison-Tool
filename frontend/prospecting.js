@@ -108,8 +108,14 @@
       why: "They manage day-to-day building upkeep and order cleaning/restocking supplies.",
       pitch: "janitorial supply",
     },
+    branded: {
+      label: "Branded & promotional products",
+      titles: ["Marketing Manager", "Events / Communications Manager", "Office Manager"],
+      why: "Marketing and events teams order logo items for customers, trade shows and employee gifts.",
+      pitch: "branded and promotional product",
+    },
     apparel: {
-      label: "Uniforms & corporate apparel",
+      label: "Purchased uniforms & work apparel",
       titles: ["HR Director", "Marketing Manager (Corporate)", "Operations Lead (Field/Techs)"],
       why: "HR coordinates employee apparel programs; Marketing handles corporate branding.",
       pitch: "uniform & apparel",

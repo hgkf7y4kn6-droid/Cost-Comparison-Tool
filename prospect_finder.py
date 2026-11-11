@@ -7,8 +7,7 @@ headcount and the decision-maker. Both keys stay on the server.
                domain, headcount inside the range (unknown headcount is kept
                and flagged so the rep can decide)
     Enrich     on demand, one company at a time: Apollo organization enrich for
-               headcount, then people search for the buyer (office / facilities /
-               operations / purchasing). Names and titles only. Emails that
+               headcount, then people search for the buyer (for the chosen product line: facilities, marketing, operations, owner…). Names and titles only. Emails that
                Apollo locks cost a credit to reveal and are never revealed here.
 
 Nothing is stored: results go to the rep's browser, which adds the ones they pick
@@ -46,36 +45,44 @@ AREAS: Dict[str, Dict[str, Any]] = {
                   "apollo": ["Lancaster County, Pennsylvania, United States"]},
 }
 
-# What an Office Basics rep sells to: offices that buy supplies, break-room items,
-# printing and furniture. `q` are Google search phrases, `tags` Apollo keyword tags.
+# The four product lines the rep prospects for. `q` are Google search phrases, `tags` Apollo keyword tags,
+# `product` the Sales Hub product-interest key the lead is filed under, `titles` who buys it (most senior first).
 SEGMENTS: Dict[str, Dict[str, Any]] = {
-    "professional": {"label": "Professional offices (law, accounting, insurance, finance)",
-                     "q": ["law firm", "accounting firm", "insurance agency", "financial advisor"],
-                     "tags": ["legal services", "accounting", "insurance", "financial services"]},
-    "healthcare": {"label": "Medical & dental practices",
-                   "q": ["medical practice", "dental office", "physical therapy clinic", "urgent care"],
-                   "tags": ["medical practice", "dental", "health care", "physical therapy"]},
-    "property": {"label": "Property management & real estate",
-                 "q": ["property management company", "commercial real estate", "real estate office"],
-                 "tags": ["property management", "commercial real estate", "real estate"]},
-    "industrial": {"label": "Manufacturing, warehouse & distribution",
-                   "q": ["manufacturing company", "distribution center", "warehouse", "logistics company"],
-                   "tags": ["manufacturing", "logistics & supply chain", "warehousing", "wholesale"]},
-    "education": {"label": "Schools, colleges & child care",
-                  "q": ["private school", "charter school", "child care center", "trade school"],
-                  "tags": ["education management", "primary/secondary education", "higher education"]},
-    "nonprofit": {"label": "Nonprofits, churches & associations",
-                  "q": ["nonprofit organization", "community center", "association headquarters"],
-                  "tags": ["nonprofit organization management", "civic & social organization"]},
-    "tech": {"label": "Technology, marketing & staffing offices",
-             "q": ["staffing agency", "marketing agency", "software company", "IT services"],
-             "tags": ["staffing & recruiting", "marketing & advertising", "information technology & services"]},
-    "hospitality": {"label": "Hotels, restaurants & fitness",
-                    "q": ["hotel", "fitness center", "event venue"],
-                    "tags": ["hospitality", "leisure, travel & tourism", "health, wellness & fitness"]},
+    "janitorial": {
+        "label": "Janitorial supplies (facility-heavy buyers)", "product": "janitorial",
+        "q": ["medical clinic", "school", "hotel", "warehouse", "fitness center", "senior living facility",
+              "property management company", "church"],
+        "tags": ["hospital & health care", "primary/secondary education", "hospitality", "warehousing",
+                 "property management", "health, wellness & fitness"],
+        "titles": ["facilities manager", "director of facilities", "building manager", "operations manager",
+                   "purchasing manager", "procurement", "property manager", "office manager"]},
+    "furniture": {
+        "label": "Commercial furniture projects (new, moving or renovating)", "product": "furniture",
+        "q": ["architecture firm", "interior design firm", "general contractor", "coworking space",
+              "commercial real estate developer", "senior living community", "charter school", "medical office"],
+        "tags": ["architecture & planning", "design", "construction", "commercial real estate", "higher education",
+                 "hospital & health care"],
+        "titles": ["director of facilities", "facilities manager", "vice president of operations", "office manager",
+                   "workplace experience", "real estate manager", "project manager", "owner", "principal"]},
+    "branded": {
+        "label": "Branded & promotional products", "product": "branded",
+        "q": ["bank", "credit union", "brewery", "nonprofit organization", "sports club", "franchise office",
+              "trade association", "college"],
+        "tags": ["banking", "nonprofit organization management", "marketing & advertising", "events services",
+                 "higher education", "sports"],
+        "titles": ["marketing manager", "director of marketing", "communications manager", "events manager",
+                   "development director", "business development", "office manager", "owner"]},
+    "uniforms": {
+        "label": "Purchased uniforms & work apparel", "product": "apparel",
+        "q": ["HVAC contractor", "plumbing company", "electrician", "landscaping company", "auto repair shop",
+              "restaurant", "security company", "cleaning company"],
+        "tags": ["construction", "automotive", "restaurants", "security & investigations", "facilities services",
+                 "utilities"],
+        "titles": ["owner", "president", "operations manager", "general manager", "hr director", "office manager",
+                   "fleet manager", "purchasing manager"]},
 }
 
-# Who buys office, break-room and facility supplies, most senior first.
+# Fallback buyer titles when a company's product line is unknown.
 BUYER_TITLES = ["owner", "president", "ceo", "office manager", "facilities manager", "director of operations",
                 "operations manager", "purchasing manager", "procurement", "administrator", "practice manager",
                 "business manager", "controller"]
@@ -324,9 +331,13 @@ def apollo_enrich(row: Dict[str, Any], key: str, http: Http = http_json) -> None
         row["employees"], row["headcountSource"] = a["employees"], "Apollo"
 
 
-def _title_rank(title: str) -> int:
+def _titles_for(row: Dict[str, Any]) -> List[str]:
+    return SEGMENTS.get(row.get("segmentKey", ""), {}).get("titles") or BUYER_TITLES
+
+
+def _title_rank(title: str, titles: List[str]) -> int:
     t = (title or "").lower()
-    return next((i for i, d in enumerate(BUYER_TITLES) if d in t), len(BUYER_TITLES))
+    return next((i for i, d in enumerate(titles) if d in t), len(titles))
 
 
 def apollo_contact(row: Dict[str, Any], key: str, http: Http = http_json) -> None:
@@ -336,11 +347,12 @@ def apollo_contact(row: Dict[str, Any], key: str, http: Http = http_json) -> Non
     if not domain:
         return
     data = http("POST", f"{APOLLO}/mixed_people/search", {"X-Api-Key": key}, {
-        "q_organization_domains_list": [domain], "person_titles": BUYER_TITLES, "page": 1, "per_page": 5})
+        "q_organization_domains_list": [domain], "person_titles": _titles_for(row), "page": 1, "per_page": 5})
     people = data.get("people") or data.get("contacts") or []
     if not people:
         return
-    p = min(people, key=lambda x: _title_rank(x.get("title", "")))
+    titles = _titles_for(row)
+    p = min(people, key=lambda x: _title_rank(x.get("title", ""), titles))
     row["contactName"] = p.get("name") or " ".join(filter(None, (p.get("first_name"), p.get("last_name"))))
     row["contactTitle"] = p.get("title") or ""
     email = p.get("email") or ""
@@ -452,6 +464,7 @@ def search(user_budget: Budget, user: str, segment: str, area_key: str, lo: int,
     screened = screen(merge(rows), area, lo, hi)
     for r in screened:
         r["segmentKey"] = segment
+        r["product"] = seg["product"]
     return {"results": screened[:limit], "found": len(screened), "notes": notes,
             "remaining": user_budget.remaining(user)}
 
@@ -463,7 +476,7 @@ def enrich(user_budget: Budget, user: str, row: Dict[str, Any], http: Http = htt
         raise ValueError("Apollo isn't connected on this server (APOLLO_API_KEY).")
     if not domain_of(row.get("website")):
         raise ValueError("This company has no website, so Apollo can't look it up.")
-    out = {k: row.get(k, "") for k in ("company", "website", "employees", "headcountSource", "industry", "phone",
+    out = {k: row.get(k, "") for k in ("company", "segmentKey", "website", "employees", "headcountSource", "industry", "phone",
                                        "address", "zip", "linkedinUrl", "contactName", "contactTitle", "email",
                                        "emailStatus")}
     user_budget.spend(user, 2)

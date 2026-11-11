@@ -230,7 +230,7 @@
     const list = filteredAccounts();
     const tbody = $("a-rows");
     tbody.replaceChildren();
-    const short = { furniture: "Furniture", janitorial: "Janitorial", apparel: "Apparel" };
+    const short = { furniture: "Furniture", janitorial: "Janitorial", apparel: "Uniforms", branded: "Branded" };
     for (const { a, m } of list) {
       const tr = document.createElement("tr");
       tr.dataset.id = a.id;

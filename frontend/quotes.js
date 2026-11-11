@@ -27,6 +27,7 @@
     janitorial: "Janitorial & facility",
     furniture: "Furniture & design",
     apparel: "Uniforms & apparel",
+    branded: "Branded products",
     other: "Other",
   };
 
@@ -35,16 +36,18 @@
   const LINE_KEYWORDS = {
     furniture: /\b(chair|desk|table|workstation|cabinet|shelv|cubicle|seating|furniture|bookcase|credenza|ergonomic)/,
     apparel: /\b(shirt|polo|scrub|jacket|uniform|apparel|hat|cap|vest|pant|quarter[- ]?zip|hoodie|fleece)/,
+    branded: /\b(branded|logo|promo\w*|drinkware|tote|giveaway|lanyard|banner|signage|swag)/,
   };
 
   function guessLineType(text) {
     const t = (text || "").toLowerCase();
     if (LINE_KEYWORDS.furniture.test(t)) return "furniture";
     if (LINE_KEYWORDS.apparel.test(t)) return "apparel";
+    if (LINE_KEYWORDS.branded.test(t)) return "branded";
     return "janitorial";
   }
 
-  const DEFAULT_FREQ = { janitorial: "month", furniture: "once", apparel: "once", other: "once" };
+  const DEFAULT_FREQ = { janitorial: "month", furniture: "once", apparel: "once", branded: "once", other: "once" };
 
   // Default sales-tax rate from the customer's location. Reps confirm per deal.
   function defaultTaxRate(c) {
@@ -433,7 +436,10 @@
 
   // Quote lines keep a coarse product line ("type") for account coverage and
   // the six-way catalog category for display.
-  const CAT_TO_TYPE = { janitorial: "janitorial", breakroom: "janitorial", furniture: "furniture", promo: "apparel", office: "other", printing: "other", other: "other" };
+  const CAT_TO_TYPE = { janitorial: "janitorial", breakroom: "janitorial", furniture: "furniture", promo: "branded", office: "other", printing: "other", other: "other" };
+  // Print and Promotional holds two product lines: worn items are uniforms/apparel, the rest branded products.
+  const WORN = /\b(uniforms?|apparel|shirts?|polos?|hoodies?|jackets?|caps?|hats?|scrubs?|aprons?|pants|vests?|boots?)\b/i;
+  const typeFor = (category, name) => (category === "promo" && WORN.test(name || "") ? "apparel" : CAT_TO_TYPE[category] || "other");
   const CAT_FREQ = { furniture: "once", promo: "once" }; // everything else restocks monthly
   // Rounded up to the cent so the price never lands below the chosen margin.
   const priceFor = (cost, m) => Math.ceil((num(cost) / (1 - Math.min(99.9, Math.max(0, num(m))) / 100)) * 100 - 1e-9) / 100;
@@ -840,7 +846,7 @@
       sku: ipInputs["ip-sku"].value.trim(),
       name,
       category,
-      type: CAT_TO_TYPE[category] || "other",
+      type: typeFor(category, name),
       qty: val("ip-qty") ?? 1,
       uom: ipInputs["ip-uom"].value.trim() || "each",
       freq: $("ip-freq").value,

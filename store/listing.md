@@ -16,7 +16,7 @@ Edit the product name if you ship under your own brand. Character limits are the
 Sales Hub is the sales app for business development reps who sell office, break-room, janitorial and print supplies.
 It follows the sale from the first search to the first order.
 
-FIND CUSTOMERS. Search Google Maps for businesses near you by type and area. See estimated headcount and the person who buys supplies. Add the good ones to your pipeline in one tap.
+FIND CUSTOMERS. Pick what you sell (janitorial supplies, commercial furniture projects, branded products or purchased uniforms) and an area. Google Maps finds the businesses; see estimated headcount and the person who buys. Add the good ones to your pipeline in one tap.
 
 COMPARE COSTS. Photograph or upload what a customer buys today and get good, better and best alternatives, compared on cost per use, not case price.
 

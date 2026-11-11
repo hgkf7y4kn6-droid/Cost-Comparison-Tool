@@ -169,6 +169,7 @@
         source: r.source || "Customer finder", placeId: r.placeId || "", lat: r.lat ?? "", lng: r.lng ?? "",
         geoQuery: [r.address, r.city, r.state].filter(Boolean).join(", "), geocodedAt: r.lat != null ? new Date().toISOString() : "",
         linkedinUrl: r.linkedinUrl || "",
+        products: r.product ? [r.product] : [], // the product line searched for
       }))
     );
     const skipped = rows.length - added.length;

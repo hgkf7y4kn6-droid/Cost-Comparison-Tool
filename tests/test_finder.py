@@ -43,7 +43,7 @@ def test_merge_by_domain_screen_by_radius_and_headcount(keys):
                 place("3", "Closed Co", 39.95, -75.16, "https://closed.com", status="CLOSED_PERMANENTLY")],
         orgs=[{"name": "Acme Law", "website_url": "http://acmelaw.com", "estimated_num_employees": 45, "city": "Philadelphia", "state": "Pennsylvania"},
               {"name": "Tiny LLC", "website_url": "http://tiny.com", "estimated_num_employees": 3}])
-    out = pf.search(pf.Budget(100), "u@x.com", "professional", "philadelphia", 20, 500, http=http)
+    out = pf.search(pf.Budget(100), "u@x.com", "furniture", "philadelphia", 20, 500, http=http)
     names = [r["company"] for r in out["results"]]
     assert names == ["Acme Law LLC"]  # merged on domain, far/closed/tiny dropped
     r = out["results"][0]
@@ -53,27 +53,27 @@ def test_merge_by_domain_screen_by_radius_and_headcount(keys):
 
 def test_unknown_headcount_is_kept_and_flagged(keys):
     http = FakeHttp(places=[place("1", "Mystery Dental", 39.95, -75.16, "https://m.com")])
-    r = pf.search(pf.Budget(100), "u", "healthcare", "philadelphia", 20, 500, http=http)["results"][0]
+    r = pf.search(pf.Budget(100), "u", "janitorial", "philadelphia", 20, 500, http=http)["results"][0]
     assert r["employees"] == ""
 
 
 def test_one_provider_failing_still_returns_the_other(keys):
     http = FakeHttp(places=[place("1", "Acme", 39.95, -75.16, "https://a.com")], fail="apollo")
-    out = pf.search(pf.Budget(100), "u", "professional", "philadelphia", 20, 500, http=http)
+    out = pf.search(pf.Budget(100), "u", "furniture", "philadelphia", 20, 500, http=http)
     assert len(out["results"]) == 1 and "Apollo" in out["notes"][0]
     assert "api" not in out["notes"][0].lower().replace("api key", "")  # no URLs or keys leak
 
 
 def test_all_providers_failing_raises(keys):
     with pytest.raises(pf.SearchFailed):
-        pf.search(pf.Budget(100), "u", "professional", "philadelphia", 20, 500, http=FakeHttp(fail="."))
+        pf.search(pf.Budget(100), "u", "furniture", "philadelphia", 20, 500, http=FakeHttp(fail="."))
 
 
 def test_budget_caps_calls_per_user(keys):
     b = pf.Budget(2)
     http = FakeHttp(places=[])
     with pytest.raises(pf.BudgetExceeded):
-        pf.search(b, "u", "professional", "philadelphia", 20, 500, http=http)
+        pf.search(b, "u", "furniture", "philadelphia", 20, 500, http=http)
     assert pf.Budget(2).remaining("other") == 2 and b.remaining("u") == 0
     assert len(http.calls) <= 2  # stopped before overspending
 
@@ -99,14 +99,35 @@ def test_validation_and_unconfigured(monkeypatch):
     for k in ("GOOGLE_PLACES_API_KEY", "GOOGLE_MAPS_API_KEY", "APOLLO_API_KEY"):
         monkeypatch.delenv(k, raising=False)
     with pytest.raises(ValueError, match="isn't set up"):
-        pf.search(pf.Budget(10), "u", "professional", "philadelphia", 20, 500, http=FakeHttp())
+        pf.search(pf.Budget(10), "u", "furniture", "philadelphia", 20, 500, http=FakeHttp())
     monkeypatch.setenv("APOLLO_API_KEY", "a")
     with pytest.raises(ValueError):
         pf.search(pf.Budget(10), "u", "nope", "philadelphia", 20, 500, http=FakeHttp())
     with pytest.raises(ValueError):
-        pf.search(pf.Budget(10), "u", "professional", "philadelphia", 500, 20, http=FakeHttp())
+        pf.search(pf.Budget(10), "u", "furniture", "philadelphia", 500, 20, http=FakeHttp())
 
 
 def test_provider_error_messages_hide_secrets():
     assert "key" in str(pf.ProviderError("Google", 403))
     assert "http" not in str(pf.ProviderError("Apollo", 500)).lower().replace("(http 500)", "")
+
+
+def test_each_product_line_has_queries_titles_and_a_known_product():
+    assert set(pf.SEGMENTS) == {"janitorial", "furniture", "branded", "uniforms"}
+    for seg in pf.SEGMENTS.values():
+        assert seg["q"] and seg["tags"] and seg["titles"] and seg["product"] in {"janitorial", "furniture", "branded", "apparel"}
+
+
+def test_buyer_title_depends_on_the_product_line(keys):
+    people = [{"name": "Olivia Owner", "title": "Owner", "email": "email_not_unlocked@x.com"},
+              {"name": "Mia Marketing", "title": "Director of Marketing", "email": "email_not_unlocked@x.com"}]
+    row = {"company": "Acme", "website": "acme.com"}
+    branded = pf.enrich(pf.Budget(10), "u", {**row, "segmentKey": "branded"}, http=FakeHttp(people=people))
+    uniforms = pf.enrich(pf.Budget(10), "u", {**row, "segmentKey": "uniforms"}, http=FakeHttp(people=people))
+    assert branded["contactName"] == "Mia Marketing" and uniforms["contactName"] == "Olivia Owner"
+
+
+def test_results_carry_the_product_for_the_lead(keys):
+    http = FakeHttp(places=[place("1", "Acme HVAC", 39.95, -75.16, "https://a.com")])
+    r = pf.search(pf.Budget(100), "u", "uniforms", "philadelphia", 20, 500, http=http)["results"][0]
+    assert r["product"] == "apparel" and r["segmentKey"] == "uniforms"

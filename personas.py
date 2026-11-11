@@ -171,6 +171,14 @@ What signals influence your perception of a business before you buy from them?""
              "contacts, not consumer addresses. Keep it to a few sentences: why this person, one outcome, one ask. "
              "Do not record calls without every party's consent (Pennsylvania and New Jersey differ; when unsure, "
              "ask permission on the call or don't record). Honor opt-outs immediately."},
+    {"id": "product-lines", "title": "Who buys each product line", "personas": ["discovery", "outreach", "growth", "proposal"],
+     "tags": ["janitorial", "furniture", "branded", "promotional", "uniforms", "apparel", "buyer", "title", "prospect", "project"],
+     "body": "Janitorial supplies: facilities, building or operations managers and purchasing; look for sites with heavy foot traffic "
+             "(clinics, schools, hotels, warehouses). Commercial furniture projects: facilities directors, office managers, workplace "
+             "experience leads, and the architects, designers and contractors who specify projects; ask about moves, new space, "
+             "renovations and timelines. Branded products: marketing, communications and events people; ask what events, giveaways and "
+             "customer gifts are coming. Purchased uniforms: owners, operations or general managers and HR; ask who is uniformed, how "
+             "often they reorder, and what they pay per employee. Open each conversation with the buyer's own problem."},
     {"id": "onboarding-growth", "title": "Onboard, then grow the account", "personas": ["growth"],
      "tags": ["onboarding", "account", "growth", "cross-sell", "review", "qbr", "renewal", "expand", "90 day"],
      "body": "A won account starts with onboarding: kickoff, account setup, contacts, contract pricing, delivery and "
