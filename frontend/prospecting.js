@@ -1005,6 +1005,43 @@
     ].join("\n");
   }
 
+  // Outreach cadence (cadence.js): "I sent this" records an attempt; the cap is 1 first outreach + 2 follow-ups.
+  function renderCadence() {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead || !hub.cadence) return;
+    const s = hub.cadence.status(lead, hub.today());
+    const max = hub.cadence.MAX_ATTEMPTS;
+    $("d-pause").textContent = lead.outreachPaused ? "Resume outreach" : "Pause outreach";
+    $("d-sent").disabled = !!lead.outreachPaused || s.state === "capped";
+    $("d-cadence").textContent =
+      s.state === "paused" ? "Outreach is paused for this lead: no follow-up reminders."
+      : s.state === "capped" ? `Cap reached: ${s.attempt} attempts with no reply. Stop chasing: try a different channel or pause outreach.`
+      : s.attempt ? `Attempt ${s.attempt} of ${max} sent ${hub.fmtDate(s.last)}. ${s.followUpsLeft} follow-up${s.followUpsLeft === 1 ? "" : "s"} left; ${s.state === "due" ? "the next is due now" : `the next is due ${hub.fmtDate(s.eligibleOn)}`} (at least ${hub.cadence.MIN_GAP_BUSINESS_DAYS} business days apart).`
+      : `Up to ${max} attempts (a first email and 2 follow-ups), then stop.`;
+  }
+
+  $("d-sent").addEventListener("click", () => {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead) return;
+    const subject = ($("d-draft").value.match(/^Subject:\s*(.+)$/m) || [])[1] || "";
+    lead.activities = lead.activities || [];
+    lead.activities.push({ id: hub.newId("act"), date: hub.today(), type: "email", outbound: true, text: `Outreach email sent${subject ? `: ${subject}` : ""}` });
+    if (["new", "enriched", "verified"].includes(lead.stage)) lead.stage = "contacted";
+    lead.updated = new Date().toISOString();
+    form.elements.stage.value = lead.stage;
+    save();
+    renderCadence();
+  });
+  $("d-pause").addEventListener("click", () => {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead) return;
+    lead.outreachPaused = !lead.outreachPaused;
+    if (lead.outreachPaused) { lead.nextAction = ""; lead.nextActionDate = ""; }
+    lead.updated = new Date().toISOString();
+    save();
+    renderCadence();
+  });
+
   function refreshDetailHints() {
     const d = readForm();
     const titles = [...new Set(d.products.flatMap((p) => PRODUCTS[p].titles))];
@@ -1013,6 +1050,7 @@
     $("d-warning").hidden = !w.length;
     $("d-warning").textContent = w.join(" ");
     $("d-draft").value = draftEmail(d);
+    renderCadence();
   }
   form.addEventListener("input", refreshDetailHints);
 

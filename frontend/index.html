@@ -387,7 +387,12 @@
         </div>
         <div class="xcard-body">
           <textarea id="d-draft" rows="11" readonly></textarea>
-          <button type="button" class="btn small" id="d-copy">Copy draft</button>
+          <div class="row-buttons">
+            <button type="button" class="btn small" id="d-copy">Copy draft</button>
+            <button type="button" class="btn small primary" id="d-sent" title="Records this as an outreach attempt so Today can time your follow-ups">I sent this</button>
+            <button type="button" class="btn small" id="d-pause">Pause outreach</button>
+          </div>
+          <p id="d-cadence" class="hint" aria-live="polite"></p>
         </div>
       </div>
     </section>
@@ -1177,6 +1182,7 @@
 
   <script defer src="config.js"></script>
   <script defer src="store.js"></script>
+  <script defer src="cadence.js"></script>
   <script defer src="cards.js"></script>
   <script defer src="auth.js"></script>
   <script defer src="tabs.js"></script>

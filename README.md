@@ -269,6 +269,17 @@ how the person likes to be approached and drafts outreach to match.
 - **Coach**: with *Use the current deal for context* on, the coaches (especially Outreach Writer) also get a one-line style note.
 - Nothing is stored server-side: the app sends the signals it already holds. API: `POST /persona/infer`, `POST /persona/draft`.
 
+## Follow-up cap (Today)
+Cold outreach stops after a **first email and two follow-ups**, at least **3 business days apart** (`frontend/cadence.js`).
+- Press **I sent this** on a lead's outreach draft to record an attempt (the lead moves to *Contacted*). Only attempts recorded
+  this way count.
+- **Today → Follow-ups** then reminds you when the next follow-up is allowed ("Follow-up 1 of 2"), even if you set an earlier date.
+- After the third unanswered attempt the reminder is replaced by **Outreach cap reached** with *Open lead* and *Pause outreach*,
+  so the app stops nagging you to chase. *Pause outreach* / *Resume outreach* is also on the lead.
+- A logged reply (a touch of type *email* that isn't an "I sent this"), a call, a meeting or a visit restarts the count. Leads
+  past *Contacted* (qualified, proposal sent, won) aren't cold and aren't capped. Proposal and account follow-ups are not capped.
+- Tests: `node --test tests/cadence.test.mjs` (also in CI).
+
 ## Privacy, AI consent and account deletion
 - **AI consent.** Coaches, "Tidy with AI" and AI card reading send the rep's text or photo to Anthropic. The app asks
   once (and in *Account*) and sends an `X-AI-Consent: granted` header only after a yes; the server uses its non-AI
