@@ -104,17 +104,47 @@
     const quotedLeads = new Set(state.quotes.map((q) => q.leadId).filter(Boolean));
 
     // Follow-ups: account next actions due within a week, overdue first.
-    const leadFollowUps = state.leads
-      .filter((l) => l.nextActionDate && l.nextActionDate <= week && !["won", "disqualified"].includes(l.stage)
-        && !state.accounts.some((a) => a.leadId === l.id))
-      .map((l) => ({ l, late: l.nextActionDate < today }))
-      .map(({ l, late }) => ({
+    const cad = hub.cadence;
+    const pause = (l) => () => {
+      l.outreachPaused = true;
+      l.nextAction = "";
+      l.nextActionDate = "";
+      l.updated = new Date().toISOString();
+      hub.save();
+    };
+    const leadFollowUps = [];
+    for (const l of state.leads) {
+      if (["won", "disqualified"].includes(l.stage) || state.accounts.some((a) => a.leadId === l.id)) continue;
+      const s = cad.status(l, today);
+      if (s.state === "paused") continue;
+      const open = ["Open lead", work("lead", l.id, () => hub.openLead(l.id)), true];
+      if (s.state === "capped") {
+        // The cap: three attempts with no reply. Stop chasing instead of scheduling another reminder.
+        leadFollowUps.push({
+          title: l.company,
+          detail: `Outreach cap reached: ${s.attempt} attempts since ${hub.fmtDate(cad.attempts(l)[0].date)}, no reply. Try another channel or stop.`,
+          tone: "soon", date: today, actions: [open, ["Pause outreach", pause(l)]],
+        });
+        continue;
+      }
+      // A cold lead mid-sequence is reminded when the next follow-up is allowed (3+ business days after the last
+      // attempt), even if the rep set an earlier date by hand.
+      let due = l.nextActionDate || "";
+      let label = l.nextAction || "Follow up";
+      if (s.attempt) {
+        if (!due || due < s.eligibleOn) due = s.eligibleOn;
+        label = s.dialogue ? "Active email thread: reply or follow up" : `Follow-up ${s.attempt} of ${cad.MAX_ATTEMPTS - 1}`;
+        if (l.nextAction && l.nextActionDate && l.nextActionDate >= s.eligibleOn) label = l.nextAction;
+      }
+      if (!due || due > week) continue;
+      const late = due < today;
+      leadFollowUps.push({
         title: l.company,
-        detail: `${l.nextAction || "Follow up"} — ${late ? `overdue since ${hub.fmtDate(l.nextActionDate)}` : l.nextActionDate === today ? "due today" : `due ${hub.fmtDate(l.nextActionDate)}`}`,
-        tone: late ? "late" : l.nextActionDate === today ? "soon" : "",
-        date: l.nextActionDate,
-        actions: [["Open lead", work("lead", l.id, () => hub.openLead(l.id)), true]],
-      }));
+        detail: `${label} — ${late ? `overdue since ${hub.fmtDate(due)}` : due === today ? "due today" : `due ${hub.fmtDate(due)}`}`,
+        tone: late ? "late" : due === today ? "soon" : "",
+        date: due, actions: [open],
+      });
+    }
     const followUps = liveAccounts
       .filter((a) => a.nextActionDate && a.nextActionDate <= week)
       .sort((a, b) => a.nextActionDate.localeCompare(b.nextActionDate))
@@ -221,7 +251,7 @@
 
     const grid = $("today-grid");
     grid.replaceChildren(
-      card("followups", "Follow-ups", "Next actions on your accounts, due within a week.", followUps, "Nothing due this week."),
+      card("followups", "Follow-ups", "Next actions due within a week. Cold outreach stops after a first email and two follow-ups.", followUps, "Nothing due this week."),
       card("proposals", "Proposals waiting on the customer", "Expired and expiring first, then the ones gone quiet.", waiting, "No proposals out right now."),
       card("ready", "Ready to quote", "Leads you've talked to that don't have a quote yet.", toQuote, "Every engaged lead has a quote."),
       card("drafts", "Drafts to finish", "Quotes not sent yet, oldest first.", drafts, "No drafts waiting."),

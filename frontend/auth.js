@@ -81,6 +81,8 @@
     }
     const headers = new Headers(options.headers || {});
     headers.set("Authorization", `Bearer ${session.token}`);
+    // Sent only after the user agrees (Account dialog) to let AI features process their text and photos.
+    if (hub.aiConsent && hub.aiConsent.granted()) headers.set("X-AI-Consent", "granted");
     let res;
     try {
       res = await fetch(`${API}${path}`, { ...options, headers });

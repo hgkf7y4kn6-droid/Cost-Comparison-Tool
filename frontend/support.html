@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Help & support · Sales Hub</title>
+  <meta name="description" content="Get help with Sales Hub.">
+  <meta name="theme-color" content="#0f1a2c">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .legal { max-width: 760px; margin: 0 auto; padding: 1.4em 20px 4em; }
+    .legal h1 { font: 400 2em/1.15 var(--font-display); margin: 0.2em 0 0.1em; }
+    .legal h2 { font: 400 1.35em/1.25 var(--font-display); margin: 1.6em 0 0.4em; }
+    .legal p, .legal li { line-height: 1.65; }
+    .legal table { margin: 0.8em 0; }
+    .legal .updated { color: var(--muted); font-size: 0.9em; }
+    .legal-nav { display: flex; gap: 1.2em; flex-wrap: wrap; padding: 0.8em 20px; background: var(--ink); }
+    .legal-nav a { color: var(--on-ink); font-weight: 600; text-decoration: none; }
+    .legal-nav a[aria-current] { color: #e2bd6e; }
+  </style>
+</head>
+<body>
+  <nav class="legal-nav" aria-label="Sales Hub"><a href="./">← Sales Hub</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="support.html" aria-current="page">Support</a></nav>
+  <main class="legal" id="main">
+
+    <h1>Help &amp; support</h1>
+    <p>Email <a data-support-email>your administrator</a> and include your work email, what you were doing, and what you saw (a screenshot helps). Please don't send passwords.</p>
+
+    <h2>Common questions</h2>
+    <h3>I can't sign in.</h3>
+    <p>Accounts are created by your administrator. After five wrong passwords sign-in pauses for 15 minutes. If you forgot your password, ask your administrator to issue a new one.</p>
+    <h3>The first screen takes a while to load.</h3>
+    <p>The server may be waking up. Wait a minute and try again.</p>
+    <h3>“Customer search isn't connected.”</h3>
+    <p>Your administrator needs to add the Google Places and Apollo keys on the server. Until then you can import lists or add a business from the map.</p>
+    <h3>The map is blank.</h3>
+    <p>The map needs a Google Maps key (set by your administrator) that allows this app's address.</p>
+    <h3>Voice dictation isn't there.</h3>
+    <p>Dictation uses your browser's speech service (Chrome, Edge, Safari on the web). In the phone apps use your keyboard's microphone key.</p>
+    <h3>How do I delete my account and data?</h3>
+    <p>Open <em>Account → Delete my account</em> in the app. You can download a copy of your data first from the same screen.</p>
+    <h3>How do I use the app offline?</h3>
+    <p>The app opens and shows what's on your device. Searches, coaching and syncing need a connection and catch up when you're back online.</p>
+    <p class="updated"><a href="privacy.html">Privacy policy</a> · <a href="terms.html">Terms of use</a></p>
+
+  </main>
+  <script src="config.js"></script>
+  <script>
+    (function () {
+      var c = window.COMPANY || {};
+      document.querySelectorAll("[data-company]").forEach(function (e) { e.textContent = c.name || "Office Basics"; });
+      document.querySelectorAll("[data-support-email]").forEach(function (a) {
+        if (c.supportEmail) { a.href = "mailto:" + c.supportEmail; a.textContent = c.supportEmail; }
+        else { a.removeAttribute("href"); a.textContent = "your administrator"; }
+      });
+      document.querySelectorAll("[data-address]").forEach(function (e) { if (c.mailingAddress) e.textContent = c.mailingAddress; else e.hidden = true; });
+    })();
+  </script>
+</body>
+</html>

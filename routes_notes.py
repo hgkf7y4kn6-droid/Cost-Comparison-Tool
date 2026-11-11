@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
 import notes
-from deps import authenticator
+from deps import ai_allowed, authenticator
 
 router = APIRouter()
 inbox = notes.NoteInbox(os.path.join(os.environ.get("DATA_DIR", tempfile.gettempdir()), "note_inbox.db"))
@@ -26,7 +26,7 @@ async def structure(request: Request):
     if not isinstance(body, dict):
         raise HTTPException(400, "Body must be a JSON object.")
     try:
-        return await run_in_threadpool(notes.structure_note, body.get("text", ""), str(body.get("context", "")))
+        return await run_in_threadpool(notes.structure_note, body.get("text", ""), str(body.get("context", "")), None, ai_allowed(request))
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
 

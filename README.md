@@ -1,7 +1,7 @@
-# VectorSales
+# Sales Hub (Cost Comparison Tool)
 
-Prospecting, cost comparisons, proposals and accounts for a field sales team,
-in one web app. The FastAPI backend serves both the API and the web app, so a
+Find customers, compare costs, build proposals, coach and grow accounts for an Office Basics
+business development rep, in one web app that also ships as an iPhone/iPad and Android app. The FastAPI backend serves both the API and the web app, so a
 single Render service runs the whole product: open the service's URL, sign in.
 
 Design: ink navy and brass on warm paper, with an automatic dark mode. Type is
@@ -203,6 +203,106 @@ The photo is not stored.
   (accounts) or the notes (leads), and nothing is overwritten. An optional "where did you meet"
   line is logged as a meeting on the record.
 
+## Find customers (Google Maps + Apollo)
+**Prospecting → Find customers** builds a target list the way VectorSales' `prospecting/build_list.py` does, focused
+on the four product lines the rep sells. Pick one:
+
+| Product line | Who it searches for | Buyer Apollo looks for |
+|---|---|---|
+| **Janitorial supplies** | facility-heavy sites: clinics, schools, hotels, warehouses, fitness centers, senior living, property managers, churches | facilities / building / operations / purchasing manager |
+| **Commercial furniture projects** | companies likely to buy a project: architects, interior designers, contractors, coworking, developers, senior living, charter schools, medical offices | facilities director, office manager, workplace experience, project manager, owner |
+| **Branded & promotional products** | banks and credit unions, breweries, nonprofits, sports clubs, franchises, associations, colleges | marketing, communications, events, development |
+| **Purchased uniforms & work apparel** | HVAC, plumbing, electrical, landscaping, auto repair, restaurants, security and cleaning companies | owner, operations/general manager, HR, fleet, purchasing |
+
+Leads are filed under the matching product interest, so the outreach draft, contact titles and cross-sell gaps follow it.
+
+1. **Discover** — Google Places text search around the chosen area (Philadelphia & suburbs, South Jersey,
+   Central NJ, Lehigh Valley, Lancaster), plus Apollo's organization search filtered to your headcount range.
+2. **Screen** — operating businesses inside the area's radius, merged by website domain, headcount in range
+   (unknown headcount is kept and flagged), best fit first (confirmed headcount, reachable buyer, website,
+   phone, reviews, distance).
+3. **Enrich on demand** — **Find buyer** asks Apollo for the headcount and the most relevant buyer (owner,
+   office/facilities/operations/purchasing manager). Name and title only: emails Apollo keeps locked are never
+   revealed, so no credits are spent without a rep choosing to.
+4. **Add as leads** — the rep ticks the companies they want; duplicates of existing leads and customers are
+   skipped. Leads carry the Google place ID and coordinates, so they appear on the region map.
+
+Both keys stay on the server (`GOOGLE_PLACES_API_KEY` — Places API (New); `APOLLO_API_KEY`) and either one alone
+works. Each rep is limited to `FINDER_DAILY_CALLS` outbound lookups per day (default 150) so a stray click can't
+run up the bill. Nothing is stored by the finder. API: `GET /finder/status`, `POST /finder/search`,
+`POST /finder/enrich`. Apollo plan limits and Google pricing change often: check both before a big push. Google's
+terms limit how long place data may be cached; the lead keeps the place ID and what the rep chose to save.
+
+## Coach: AI personas and their knowledge
+The **Coach** tab has five personas: Discovery Coach, Objection Coach, Proposal Strategist, Account Growth Coach
+and Outreach Writer. Each answers from a shared knowledge base (`personas.py`): the built-in playbook, the
+rep's own entries, and entries a manager shares with the team (add them in *Coach knowledge*).
+
+- **Perception matters in sales** is in every persona's knowledge, word for word, and is always included in
+  the AI's context, so every coach helps make the value visible, understandable and credible.
+- With `ANTHROPIC_API_KEY` the best-matching entries are handed to Claude (`COACH_AI_MODEL` overrides the model)
+  to write the answer, with the current deal's company, segment, stage and city as context. Costs, margins and
+  contacts are never sent. Without a key, or if the rep hasn't allowed AI, the same entries are shown with a checklist
+  ("Playbook mode"), so the tab always works.
+- API: `GET /coach/personas`, `POST /coach/ask`, `GET|POST /coach/knowledge`, `DELETE /coach/knowledge/{id}`.
+  Entries live in `$DATA_DIR/coach.db`.
+
+## Buyer style (persona inference for outreach)
+Each lead's detail panel has a **Buyer style** card (`buyer_persona.py`, `routes_persona.py`, `frontend/buyerstyle.js`). It infers
+how the person likes to be approached and drafts outreach to match.
+
+| Buyer reads as | Style | Draft |
+|---|---|---|
+| Impatient / urgent | Efficient Concierge | 80 words or fewer, the point first, one ask |
+| Methodical / detail-oriented | Analytical Specialist | precise; offers a written line-item comparison, item numbers and spec sheets |
+| Frustrated / emotional | Empathic Problem-Solver | acknowledges first, no pitch, effortless opt-out |
+| Novice / unsure | Proactive Advisor | plain language, one idea, offers a walkthrough |
+| Unclear | Neutral Professional | the standard draft |
+
+- **Evidence**, weighted: replies logged as *email* (3), the rep's notes, touches and CRM/note-taker imports once filed (2),
+  and web research pasted into the card (1). Signals older than 90 days count half.
+- **Rules only**: no model call and no cost. The card shows the exact quotes behind the answer.
+- **Honest by design**: thin or conflicting evidence gives "unknown" and the neutral draft; web evidence alone is never
+  "established"; frustration in an email or note beats every other cue; text that looks like instructions to an AI is ignored.
+- **Safeguards**: every styled draft keeps the opt-out line, never mentions the inference, and is never longer than the neutral
+  draft; a draft that fails these checks falls back to neutral. The rep reads and sends it themselves.
+- **Coach**: with *Use the current deal for context* on, the coaches (especially Outreach Writer) also get a one-line style note.
+- Nothing is stored server-side: the app sends the signals it already holds. API: `POST /persona/infer`, `POST /persona/draft`.
+
+## Follow-up cap (Today)
+Cold outreach stops after a **first email and two follow-ups**, at least **3 business days apart** (`frontend/cadence.js`).
+- Press **I sent this** on a lead's outreach draft to record an attempt (the lead moves to *Contacted*). Only attempts recorded
+  this way count.
+- **Today → Follow-ups** then reminds you when the next follow-up is allowed ("Follow-up 1 of 2"), even if you set an earlier date.
+- After the third unanswered attempt the reminder is replaced by **Outreach cap reached** with *Open lead* and *Pause outreach*,
+  so the app stops nagging you to chase. *Pause outreach* / *Resume outreach* is also on the lead.
+- **Active email dialogue loosens it.** If the prospect wrote back by email in the last 10 days, follow up as often as the thread
+  needs: the next reminder is the next business day and the cap is off. Once they've been quiet for 10 days the normal rules apply again.
+- A logged reply (a touch of type *email* that isn't an "I sent this"), a call, a meeting or a visit restarts the count. Leads
+  past *Contacted* (qualified, proposal sent, won) aren't cold and aren't capped. Proposal and account follow-ups are not capped.
+- Tests: `node --test tests/cadence.test.mjs` (also in CI).
+
+## Privacy, AI consent and account deletion
+- **AI consent.** Coaches, "Tidy with AI" and AI card reading send the rep's text or photo to Anthropic. The app asks
+  once (and in *Account*) and sends an `X-AI-Consent: granted` header only after a yes; the server uses its non-AI
+  fallbacks for every request without it (`deps.ai_allowed`).
+- **Delete my account** (*Account*): `POST /auth/delete-account` takes the password and the word DELETE, erases the
+  accounts and leads the user owns, their notes inbox and coach knowledge, blocks their sign-in
+  (`$DATA_DIR/deactivated_users.json`, since `AUTH_USERS` lives in the host's environment — remove the entry there too)
+  and clears the device. *Download my data* and *Clear this device* sit beside it.
+- Public **privacy policy, terms and support** pages are `frontend/privacy.html`, `terms.html`, `support.html`; set
+  your company name, support email and address in `frontend/config.js` (`window.COMPANY`).
+- **Sample data.** *Today → Try it with sample data* adds six clearly labeled fictional leads that stay on the device
+  (never synced) and can be removed from *Account*.
+
+## iPhone, iPad and Android apps
+The same web app ships in native shells built with Capacitor (`ios/`, `android/`, `capacitor.config.json`): the
+files in `frontend/` are bundled in the app and it calls your server (`NATIVE_APP_API` in `frontend/config.js`).
+Native pieces: camera for *Scan card*, status bar, Android back button (`frontend/native.js`), app icons and launch
+screens (`scripts/make_icons.py`, `scripts/native_assets.py`), the iOS privacy manifest, usage descriptions and export
+compliance flag, and the Android permissions. **Build steps, store listings, privacy-label answers and the
+submission checklist are in [store/README.md](store/README.md).**
+
 ## Sign-in (required)
 Every backend endpoint except `/health` and `/auth/login` requires a signed-in
 user, including report downloads under `/reports/`. The frontend shows a sign-in
@@ -301,6 +401,9 @@ rows (row-level security), so a bug in the app can't leak across customers.
   - `extraction.py` — price/text extraction (no ML dependencies, easy to unit test).
   - `comparison.py`, `analysis.py`, `excel_style.py` — Excel/Word report builders.
   - `config.py` — shared paths and constants.
+  - `prospect_finder.py` + `routes_finder.py` — the Google Maps + Apollo customer finder.
+  - `personas.py` + `routes_coach.py` — AI personas and the coach knowledge base.
+- `ios/`, `android/`, `capacitor.config.json`, `store/` — the native apps and store submission material.
 - `frontend/` — the static HTML/JS web app. The backend serves it at `/`, so the
   whole product runs from one service. It calls the API on the same address it was
   loaded from (`frontend/config.js`).
@@ -359,6 +462,13 @@ section 2. The separate Cloudflare frontend (section 4) is optional.
    `STATIC_HOST_API` in `frontend/config.js`; set that to your Render URL.
 3. In Render, set `ALLOWED_ORIGINS` to the Cloudflare URL (comma-separate
    multiple origins).
+
+### Optional environment variables
+| Variable | Purpose |
+|---|---|
+| `GOOGLE_PLACES_API_KEY` (or `GOOGLE_MAPS_API_KEY`), `APOLLO_API_KEY` | Customer finder (server-side only). |
+| `FINDER_DAILY_CALLS` | Lookups per rep per day (default 150). |
+| `ANTHROPIC_API_KEY`, `COACH_AI_MODEL`, `NOTES_AI_MODEL`, `CARD_AI_MODEL` | AI coaches, note tidy-up and card reading. |
 
 ## Run locally
 ```

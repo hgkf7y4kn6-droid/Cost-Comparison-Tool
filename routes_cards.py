@@ -1,18 +1,19 @@
 """Business card scanning (see cards.py)."""
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from starlette.concurrency import run_in_threadpool
 
 import cards
+from deps import ai_allowed
 
 router = APIRouter()
 
 
 @router.post("/cards/scan")
-async def scan_business_card(file: UploadFile = File(...)):
+async def scan_business_card(request: Request, file: UploadFile = File(...)):
     """Reads a business card photo into suggested contact/company fields. Nothing is stored."""
     content = await file.read(cards.MAX_IMAGE_BYTES + 1)
     try:
-        return await run_in_threadpool(cards.scan_card, content)
+        return await run_in_threadpool(cards.scan_card, content, ai_allowed(request))
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     except RuntimeError as e:

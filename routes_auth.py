@@ -41,3 +41,46 @@ async def login(payload: LoginRequest, request: Request):
 async def who_am_i(request: Request):
     email = request.state.user
     return {"email": email, "role": authenticator.role(email)}
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+    confirm: str = ""
+
+
+@router.post("/auth/delete-account")
+async def delete_account(payload: DeleteAccountRequest, request: Request):
+    """Erases the signed-in user's data and blocks their login (App Store / Google Play account deletion).
+
+    Removes the accounts and leads they own, their note inbox and their saved coach knowledge, and
+    deactivates the sign-in. Quotes, catalog and settings live in their own browser, which the app clears.
+    Requires the password and the word DELETE, so a stolen session can't wipe an account.
+    """
+    import routes_coach
+    import routes_notes
+    from deps import record_store
+
+    email = request.state.user
+    if payload.confirm.strip().upper() != "DELETE":
+        raise HTTPException(422, "Type DELETE to confirm.")
+    ip = _client_ip(request)
+    if authenticator.locked_out(email, ip):
+        raise HTTPException(429, "Too many failed attempts. Try again in 15 minutes.")
+    if not await run_in_threadpool(authenticator.login, email, payload.password, ip):
+        # 403, not 401: the browser treats any 401 as an expired session and signs the user out.
+        raise HTTPException(403, "That password is incorrect.")
+    is_manager = authenticator.role(email) == "manager"
+
+    def erase() -> dict:
+        removed = {"accounts": 0, "leads": 0}
+        for kind in removed:
+            full, _ = record_store.list_visible(kind, email, is_manager)
+            for rec in full:
+                if rec.get("ownerEmail") == email and record_store.delete(kind, rec["id"], email, is_manager):
+                    removed[kind] += 1
+        removed["notes"] = routes_notes.inbox.erase_user(email)
+        removed["knowledge"] = routes_coach.store.erase_user(email)
+        authenticator.deactivate(email)
+        return removed
+
+    return {"deleted": True, "removed": await run_in_threadpool(erase)}

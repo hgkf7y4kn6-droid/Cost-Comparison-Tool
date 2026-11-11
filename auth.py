@@ -24,6 +24,7 @@ import json
 import os
 import secrets
 import sys
+import tempfile
 import time
 from typing import Dict, Optional, Tuple
 
@@ -89,11 +90,31 @@ def _fingerprint(stored_hash: str) -> str:
 
 
 class Authenticator:
-    def __init__(self, users: Dict[str, str], secret: str, managers: Optional[set] = None):
+    def __init__(self, users: Dict[str, str], secret: str, managers: Optional[set] = None,
+                 deactivated_path: Optional[str] = None):
         self.users = users
+        # Emails whose owners deleted their account in the app. AUTH_USERS lives in the host's
+        # environment, which the app can't edit, so the entry is blocked here until an admin removes it.
+        self.deactivated_path = deactivated_path
+        self.deactivated = self._load_deactivated()
         self.secret = secret.encode()
         self.managers = {m.strip().lower() for m in (managers or set()) if m.strip()}
         self._failures: Dict[str, list] = {}
+
+    def _load_deactivated(self) -> set:
+        try:
+            with open(self.deactivated_path or "") as f:
+                return {str(e).lower() for e in json.load(f)}
+        except (OSError, ValueError, TypeError):
+            return set()
+
+    def deactivate(self, email: str) -> None:
+        self.deactivated.add(email.lower())
+        if self.deactivated_path:
+            tmp = self.deactivated_path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(sorted(self.deactivated), f)
+            os.replace(tmp, self.deactivated_path)
 
     def role(self, email: str) -> str:
         return "manager" if email in self.managers else "rep"
@@ -125,6 +146,8 @@ class Authenticator:
         except ValueError:
             return None
         stored = self.users.get(body.get("sub", ""))
+        if body.get("sub") in self.deactivated:
+            return None
         if not stored or body.get("fp") != _fingerprint(stored) or body.get("exp", 0) < now:
             return None
         return body
@@ -147,7 +170,7 @@ class Authenticator:
             email = _unb64(head[3:]).decode() if head.startswith("ik_") else ""
         except (ValueError, TypeError, UnicodeDecodeError):
             return None
-        if email not in self.users:
+        if email not in self.users or email in self.deactivated:
             return None
         return email if hmac.compare_digest(key, self.integration_key(email)) else None
 
@@ -168,6 +191,8 @@ class Authenticator:
         now = time.time() if now is None else now
         email = (email or "").strip().lower()
         stored = self.users.get(email)
+        if email in self.deactivated:
+            stored = None
         ok = verify_password(password or "", stored or _DUMMY_HASH) and stored is not None
         if ok:
             self._failures.pop(f"e:{email}", None)
@@ -189,7 +214,8 @@ def from_environment() -> Authenticator:
     if not users:
         print("WARNING: AUTH_USERS is not set; all API requests will be refused until it is.", file=sys.stderr)
     managers = set(os.environ.get("AUTH_MANAGERS", "").lower().split(","))
-    return Authenticator(users, secret, managers)
+    data_dir = os.environ.get("DATA_DIR", tempfile.gettempdir())
+    return Authenticator(users, secret, managers, os.path.join(data_dir, "deactivated_users.json"))
 
 
 if __name__ == "__main__":

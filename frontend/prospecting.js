@@ -108,8 +108,14 @@
       why: "They manage day-to-day building upkeep and order cleaning/restocking supplies.",
       pitch: "janitorial supply",
     },
+    branded: {
+      label: "Branded & promotional products",
+      titles: ["Marketing Manager", "Events / Communications Manager", "Office Manager"],
+      why: "Marketing and events teams order logo items for customers, trade shows and employee gifts.",
+      pitch: "branded and promotional product",
+    },
     apparel: {
-      label: "Uniforms & corporate apparel",
+      label: "Purchased uniforms & work apparel",
       titles: ["HR Director", "Marketing Manager (Corporate)", "Operations Lead (Field/Techs)"],
       why: "HR coordinates employee apparel programs; Marketing handles corporate branding.",
       pitch: "uniform & apparel",
@@ -950,6 +956,7 @@
     return w;
   }
 
+  let lastOutreach = null; // the pieces of the draft on screen, so a style-matched draft can reuse them
   function draftEmail(d) {
     const first = (d.contactName || "").split(/\s+/)[0];
     // Lead with the product line the contact's title owns, and keep the pitch to two lines.
@@ -979,6 +986,7 @@
       ? `${d.company}'s new space in ${place}`
       : `${pitches[0][0].toUpperCase() + pitches[0].slice(1)} costs for ${d.company}`;
 
+    lastOutreach = { first, company: d.company, pitch: pitchText, hook };
     return [
       `Subject: ${subject}`,
       "",
@@ -988,7 +996,7 @@
       "",
       `Office Basics helps local teams lower their ${pitchText} costs. We normally start with a free good/better/best cost comparison against what you buy today — often the savings come from switching formats rather than just price.`,
       "",
-      `Would a 15-minute call next week make sense?`,
+      `Worth a quick look? I can send the comparison first, no call needed.`,
       "",
       "Best,",
       "[Your name] · Office Basics · [Business mailing address]",
@@ -996,6 +1004,44 @@
       `If you're not the person handling ${pitchText} at ${d.company}, just let me know — or reply "unsubscribe" and I won't contact you again.`,
     ].join("\n");
   }
+
+  // Outreach cadence (cadence.js): "I sent this" records an attempt; the cap is 1 first outreach + 2 follow-ups.
+  function renderCadence() {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead || !hub.cadence) return;
+    const s = hub.cadence.status(lead, hub.today());
+    const max = hub.cadence.MAX_ATTEMPTS;
+    $("d-pause").textContent = lead.outreachPaused ? "Resume outreach" : "Pause outreach";
+    $("d-sent").disabled = !!lead.outreachPaused || s.state === "capped";
+    $("d-cadence").textContent =
+      s.state === "paused" ? "Outreach is paused for this lead: no follow-up reminders."
+      : s.state === "capped" ? `Cap reached: ${s.attempt} attempts with no reply. Stop chasing: try a different channel or pause outreach.`
+      : s.dialogue && s.attempt ? `Active email thread (they wrote back ${hub.fmtDate(hub.cadence.lastReply(lead))}): follow up as often as the conversation needs. The next reminder is ${s.state === "due" ? "now" : hub.fmtDate(s.eligibleOn)}, and the cap is off while they're replying.`
+      : s.attempt ? `Attempt ${s.attempt} of ${max} sent ${hub.fmtDate(s.last)}. ${s.followUpsLeft} follow-up${s.followUpsLeft === 1 ? "" : "s"} left; ${s.state === "due" ? "the next is due now" : `the next is due ${hub.fmtDate(s.eligibleOn)}`} (at least ${hub.cadence.MIN_GAP_BUSINESS_DAYS} business days apart).`
+      : `Up to ${max} attempts (a first email and 2 follow-ups), then stop.`;
+  }
+
+  $("d-sent").addEventListener("click", () => {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead) return;
+    const subject = ($("d-draft").value.match(/^Subject:\s*(.+)$/m) || [])[1] || "";
+    lead.activities = lead.activities || [];
+    lead.activities.push({ id: hub.newId("act"), date: hub.today(), type: "email", outbound: true, text: `Outreach email sent${subject ? `: ${subject}` : ""}` });
+    if (["new", "enriched", "verified"].includes(lead.stage)) lead.stage = "contacted";
+    lead.updated = new Date().toISOString();
+    form.elements.stage.value = lead.stage;
+    save();
+    renderCadence();
+  });
+  $("d-pause").addEventListener("click", () => {
+    const lead = state.leads.find((l) => l.id === openId);
+    if (!lead) return;
+    lead.outreachPaused = !lead.outreachPaused;
+    if (lead.outreachPaused) { lead.nextAction = ""; lead.nextActionDate = ""; }
+    lead.updated = new Date().toISOString();
+    save();
+    renderCadence();
+  });
 
   function refreshDetailHints() {
     const d = readForm();
@@ -1005,6 +1051,7 @@
     $("d-warning").hidden = !w.length;
     $("d-warning").textContent = w.join(" ");
     $("d-draft").value = draftEmail(d);
+    renderCadence();
   }
   form.addEventListener("input", refreshDetailHints);
 
@@ -1108,7 +1155,21 @@
     save();
     return lead;
   };
+  // Adds many leads with one save; skips ones already in the pipeline. Returns the leads it added.
+  hub.addLeads = (list) => {
+    const now = new Date().toISOString();
+    const added = [];
+    for (const fields of list) {
+      if (hub.findLead(fields)) continue;
+      const lead = normalizeLead({ id: newId(), created: now, updated: now, ...fields });
+      state.leads.push(lead);
+      added.push(lead);
+    }
+    if (added.length) save();
+    return added;
+  };
   hub.currentLeadId = () => openId;
+  hub.outreachParts = () => lastOutreach;
   hub.openLead = (id) => {
     window.showTab("prospecting");
     openLead(id);
