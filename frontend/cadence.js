@@ -6,6 +6,9 @@
 (function (root) {
   const MAX_ATTEMPTS = 3; // 1 first outreach + 2 follow-ups
   const MIN_GAP_BUSINESS_DAYS = 3;
+  // An email thread is "active" when the prospect wrote back within this many days: follow up more often and don't cap.
+  const ACTIVE_DIALOGUE_DAYS = 10;
+  const ACTIVE_GAP_BUSINESS_DAYS = 1;
   const COLD_STAGES = ["new", "enriched", "verified", "contacted"];
   // Logged as "the prospect engaged": a non-outbound email (their reply), or any meeting/visit/virtual/call.
   const ENGAGED_TYPES = ["email", "meeting", "visit", "virtual", "call"];
@@ -34,6 +37,13 @@
     return run;
   }
 
+  const daysBetween = (a, b) => Math.round((new Date(`${b.slice(0, 10)}T12:00:00Z`) - new Date(`${a.slice(0, 10)}T12:00:00Z`)) / 86400000);
+
+  // Date of the prospect's latest email reply (a logged email that isn't ours), or "".
+  function lastReply(lead) {
+    return (lead.activities || []).filter((a) => a.type === "email" && !a.outbound).map((a) => a.date || "").sort().pop() || "";
+  }
+
   // { state: "none" | "waiting" | "due" | "capped" | "paused" | "not-cold", attempt, followUpsLeft, eligibleOn, last }
   function status(lead, today) {
     if (lead.outreachPaused) return { state: "paused", attempt: 0, followUpsLeft: 0 };
@@ -41,17 +51,20 @@
       return { state: "not-cold", attempt: 0, followUpsLeft: 0 };
     }
     const run = attempts(lead);
-    if (!run.length) return { state: "none", attempt: 0, followUpsLeft: MAX_ATTEMPTS - 1 };
+    const reply = lastReply(lead);
+    const dialogue = !!reply && daysBetween(reply, today) <= ACTIVE_DIALOGUE_DAYS;
+    if (!run.length) return { state: "none", attempt: 0, followUpsLeft: MAX_ATTEMPTS - 1, dialogue };
     const last = run[run.length - 1].date;
-    const eligibleOn = addBusinessDays(last, MIN_GAP_BUSINESS_DAYS);
-    if (run.length >= MAX_ATTEMPTS) return { state: "capped", attempt: run.length, followUpsLeft: 0, last };
+    // Active email dialogue: reply the next business day, and no cap while the thread is alive.
+    const eligibleOn = addBusinessDays(last, dialogue ? ACTIVE_GAP_BUSINESS_DAYS : MIN_GAP_BUSINESS_DAYS);
+    if (run.length >= MAX_ATTEMPTS && !dialogue) return { state: "capped", attempt: run.length, followUpsLeft: 0, last, dialogue };
     return {
-      state: eligibleOn <= today ? "due" : "waiting",
-      attempt: run.length, followUpsLeft: MAX_ATTEMPTS - run.length, eligibleOn, last,
+      state: eligibleOn <= today ? "due" : "waiting", dialogue,
+      attempt: run.length, followUpsLeft: dialogue ? Infinity : MAX_ATTEMPTS - run.length, eligibleOn, last,
     };
   }
 
-  const api = { MAX_ATTEMPTS, MIN_GAP_BUSINESS_DAYS, addBusinessDays, attempts, status };
+  const api = { MAX_ATTEMPTS, MIN_GAP_BUSINESS_DAYS, ACTIVE_DIALOGUE_DAYS, ACTIVE_GAP_BUSINESS_DAYS, lastReply, addBusinessDays, attempts, status };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.SalesHub.cadence = api;
 })(typeof window !== "undefined" ? window : globalThis);

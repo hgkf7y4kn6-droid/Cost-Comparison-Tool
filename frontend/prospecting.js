@@ -1016,6 +1016,7 @@
     $("d-cadence").textContent =
       s.state === "paused" ? "Outreach is paused for this lead: no follow-up reminders."
       : s.state === "capped" ? `Cap reached: ${s.attempt} attempts with no reply. Stop chasing: try a different channel or pause outreach.`
+      : s.dialogue && s.attempt ? `Active email thread (they wrote back ${hub.fmtDate(hub.cadence.lastReply(lead))}): follow up as often as the conversation needs. The next reminder is ${s.state === "due" ? "now" : hub.fmtDate(s.eligibleOn)}, and the cap is off while they're replying.`
       : s.attempt ? `Attempt ${s.attempt} of ${max} sent ${hub.fmtDate(s.last)}. ${s.followUpsLeft} follow-up${s.followUpsLeft === 1 ? "" : "s"} left; ${s.state === "due" ? "the next is due now" : `the next is due ${hub.fmtDate(s.eligibleOn)}`} (at least ${hub.cadence.MIN_GAP_BUSINESS_DAYS} business days apart).`
       : `Up to ${max} attempts (a first email and 2 follow-ups), then stop.`;
   }

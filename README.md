@@ -276,6 +276,8 @@ Cold outreach stops after a **first email and two follow-ups**, at least **3 bus
 - **Today → Follow-ups** then reminds you when the next follow-up is allowed ("Follow-up 1 of 2"), even if you set an earlier date.
 - After the third unanswered attempt the reminder is replaced by **Outreach cap reached** with *Open lead* and *Pause outreach*,
   so the app stops nagging you to chase. *Pause outreach* / *Resume outreach* is also on the lead.
+- **Active email dialogue loosens it.** If the prospect wrote back by email in the last 10 days, follow up as often as the thread
+  needs: the next reminder is the next business day and the cap is off. Once they've been quiet for 10 days the normal rules apply again.
 - A logged reply (a touch of type *email* that isn't an "I sent this"), a call, a meeting or a visit restarts the count. Leads
   past *Contacted* (qualified, proposal sent, won) aren't cold and aren't capped. Proposal and account follow-ups are not capped.
 - Tests: `node --test tests/cadence.test.mjs` (also in CI).

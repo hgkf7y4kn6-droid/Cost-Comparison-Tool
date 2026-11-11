@@ -46,3 +46,28 @@ test("only outreach marked as sent counts", () => {
   const l = lead([{ id: "a", date: "2026-10-01", type: "note", text: "thought about emailing" }]);
   assert.equal(cad.attempts(l).length, 0);
 });
+
+const reply = (date) => ({ id: "r" + date, date, type: "email", text: "Thanks, send pricing" });
+
+test("an active email thread allows next-business-day follow-ups and lifts the cap", () => {
+  // They replied Nov 9; we answered Nov 10 and again Nov 11, Nov 12, Nov 13: four sends, no cap.
+  const l = lead([reply("2026-11-09"), out("2026-11-10"), out("2026-11-11"), out("2026-11-12"), out("2026-11-13")]);
+  const s = cad.status(l, "2026-11-16");
+  assert.equal(s.dialogue, true);
+  assert.notEqual(s.state, "capped");
+  assert.equal(s.state, "due"); // Fri Nov 13 + 1 business day = Mon Nov 16
+  assert.equal(cad.status(lead([reply("2026-11-09"), out("2026-11-10")]), "2026-11-11").state, "due"); // next day
+});
+
+test("a thread that has gone quiet (reply older than 10 days) is back under the normal rules", () => {
+  const l = lead([reply("2026-10-20"), out("2026-10-22"), out("2026-10-28"), out("2026-11-03")]);
+  const s = cad.status(l, "2026-11-11");
+  assert.equal(s.dialogue, false);
+  assert.equal(s.state, "capped");
+});
+
+test("only emails count as dialogue: a call or our own email does not", () => {
+  const l = lead([{ id: "c", date: "2026-11-10", type: "call" }, out("2026-11-10", "o")]);
+  assert.equal(cad.status(l, "2026-11-11").dialogue, false);
+  assert.equal(cad.status(l, "2026-11-11").state, "waiting"); // 3 business day gap still applies
+});

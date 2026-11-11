@@ -133,7 +133,7 @@
       let label = l.nextAction || "Follow up";
       if (s.attempt) {
         if (!due || due < s.eligibleOn) due = s.eligibleOn;
-        label = `Follow-up ${s.attempt} of ${cad.MAX_ATTEMPTS - 1}`;
+        label = s.dialogue ? "Active email thread: reply or follow up" : `Follow-up ${s.attempt} of ${cad.MAX_ATTEMPTS - 1}`;
         if (l.nextAction && l.nextActionDate && l.nextActionDate >= s.eligibleOn) label = l.nextAction;
       }
       if (!due || due > week) continue;
