@@ -2,10 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Sales Hub</title>
   <meta name="description" content="Sales Hub — prospecting, cost comparisons, proposals and accounts in one place.">
   <meta name="theme-color" content="#0f1a2c">
+  <meta name="application-name" content="Sales Hub">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Sales Hub">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23a87a2a'/%3E%3Cpath d='M8 21.5 L13.5 16 L17.5 19.5 L24 12 M19.5 12 H24 V16.5' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="preload" href="fonts/plus-jakarta-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/plus-jakarta-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -13,6 +21,8 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="offline-banner" class="offline-banner" role="status" hidden>You're offline. You can keep working with what's on this device; searches, coaching and sync resume when you're back online.</div>
   <header class="app-header">
     <div class="topbar">
       <a class="brand" href="#today" aria-label="Sales Hub — Today"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#a87a2a"/><path d="M8 21.5 L13.5 16 L17.5 19.5 L24 12" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 12 H24 V16.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-name">Sales Hub</span></a>
@@ -22,9 +32,11 @@
         <button type="button" role="tab" id="tab-btn-compare" aria-controls="tab-compare" data-tab="compare">Cost Comparison</button>
         <button type="button" role="tab" id="tab-btn-quotes" aria-controls="tab-quotes" data-tab="quotes">Proposals</button>
         <button type="button" role="tab" id="tab-btn-accounts" aria-controls="tab-accounts" data-tab="accounts">Accounts</button>
+        <button type="button" role="tab" id="tab-btn-coach" aria-controls="tab-coach" data-tab="coach">Coach</button>
       </nav>
       <div id="auth-bar" class="auth-bar" hidden>
         <strong id="auth-user"></strong>
+        <button type="button" class="link-btn" id="auth-account" aria-haspopup="dialog">Account</button>
         <button type="button" class="link-btn" id="auth-signout">Sign out</button>
       </div>
     </div>
@@ -49,14 +61,15 @@
     </div>
   </div>
 
-  <main>
+  <main id="main" tabindex="-1">
   <!-- ===================== TODAY TAB ===================== -->
   <div id="tab-today" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-today" hidden>
     <h2 class="panel-title">Today <span class="muted" id="today-date"></span></h2>
     <div id="today-start" class="card start-card" hidden>
       <h3>Start here</h3>
       <ol>
-        <li><button type="button" class="link-btn" id="start-import">Import a lead list</button> — CSV, Excel or PDF from the PA/NJ portals or a chamber directory.</li>
+        <li><button type="button" class="link-btn" id="start-find">Find customers near you</button> — Google Maps finds the businesses, Apollo adds headcount and the buyer. Or <button type="button" class="link-btn" id="start-import">import a lead list</button> (CSV, Excel or PDF).</li>
+        <li><button type="button" class="link-btn" id="start-sample">Try it with sample data</button> — six clearly labeled, fictional leads so you can see the whole flow. They stay on this device and you can remove them any time.</li>
         <li><button type="button" class="link-btn" id="start-margin">Set your target margin</button> — quotes price to it automatically.</li>
         <li><button type="button" class="link-btn" id="start-profile">Add your details</button> — printed on every proposal.</li>
       </ol>
@@ -112,6 +125,41 @@
           <div id="map-legend" class="map-legend"></div>
         </div>
         <p class="hint"><span id="map-status"></span> <button type="button" class="link-btn" id="map-locate-more" hidden>Locate more</button></p>
+      </div>
+    </section>
+
+    <!-- Find customers: Google Maps + Apollo -->
+    <section class="xcard" data-card="customer-finder">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Find customers</h2><p class="xcard-sub">Google Maps finds local businesses; Apollo adds headcount and the person who buys supplies.</p></div>
+        <span class="xcard-aside" id="finder-aside"></span>
+      </div>
+      <div class="xcard-body">
+        <form id="finder-form" class="finder-form" hidden>
+          <label>Business type <select id="finder-segment"></select></label>
+          <label>Area <select id="finder-area"></select></label>
+          <label>Employees from <input type="number" id="finder-min" min="1" max="100000" inputmode="numeric"></label>
+          <label>to <input type="number" id="finder-max" min="1" max="100000" inputmode="numeric"></label>
+          <button type="submit" class="btn" id="finder-go">Search</button>
+        </form>
+        <p class="hint" id="finder-sources"></p>
+        <div id="finder-setup" class="notice" hidden>
+          <p><strong>Customer search isn't connected yet.</strong> An administrator sets <code>GOOGLE_PLACES_API_KEY</code> (Places API (New)) and <code>APOLLO_API_KEY</code> on the server; the keys never reach this browser. You can still import lists or add a business from the map.</p>
+        </div>
+        <p id="finder-status" class="status" aria-live="polite"></p>
+        <div id="finder-results" hidden>
+          <div class="finder-bar">
+            <label class="check"><input type="checkbox" id="finder-all" checked> Select all</label>
+            <button type="button" class="btn small primary" id="finder-add">Add as leads</button>
+          </div>
+          <div class="table-wrap">
+            <table class="leads finder-table">
+              <thead><tr><th><span class="sr-only">Select</span></th><th>Company</th><th>Employees</th><th>Buyer</th><th>Phone</th><th title="Fit score, 0 to 100">Fit</th></tr></thead>
+              <tbody id="finder-rows"></tbody>
+            </table>
+          </div>
+          <p class="hint">Headcount comes from Apollo, which estimates it. “Find buyer” uses 2 lookups and shows name and title only; emails Apollo keeps locked stay locked. Email only business contacts, include your opt-out line, and respect do-not-contact requests.</p>
+        </div>
       </div>
     </section>
 
@@ -873,6 +921,50 @@
     </section>
   </div>
 
+  <!-- ===================== COACH TAB ===================== -->
+  <div id="tab-coach" class="tab-panel wide" role="tabpanel" aria-labelledby="tab-btn-coach" hidden>
+    <h2 class="panel-title">Coach <span class="muted">AI personas trained on your sales playbook</span></h2>
+    <div class="coach-layout">
+      <div id="coach-personas" class="coach-personas" role="radiogroup" aria-label="Choose a coach"></div>
+      <section class="card coach-chat" aria-labelledby="coach-title">
+        <div class="coach-head">
+          <div><h3 id="coach-title">Coach</h3><p class="hint" id="coach-blurb"></p></div>
+          <button type="button" class="btn small" id="coach-reset">New chat</button>
+        </div>
+        <label class="check coach-deal"><input type="checkbox" id="coach-use-deal" checked> Use the current deal for context <small class="muted">(company, segment, stage; never costs or contacts)</small></label>
+        <div id="coach-log" class="coach-log" aria-live="polite"></div>
+        <div id="coach-starters" class="coach-starters"></div>
+        <form id="coach-form" class="coach-form">
+          <textarea id="coach-q" rows="3" maxlength="2000" placeholder="Ask your coach… (Ctrl/⌘+Enter to send)" required></textarea>
+          <div class="row-buttons">
+            <button type="submit" class="btn" id="coach-send">Ask</button>
+            <button type="button" class="btn small" id="coach-copy-last" hidden>Copy last answer</button>
+          </div>
+        </form>
+        <p class="hint" id="coach-ai"></p>
+        <p class="hint">Coaching is guidance, not legal or financial advice. Check prices and claims before sending them to a customer.</p>
+      </section>
+    </div>
+
+    <section class="xcard" data-card="coach-knowledge" data-open="false">
+      <div class="xcard-head">
+        <div class="xcard-titles"><h2>Coach knowledge</h2><p class="xcard-sub">What the coaches know. Includes the playbook and “Perception matters in sales”. Add your own.</p></div>
+        <span class="xcard-aside" id="kb-count"></span>
+      </div>
+      <div class="xcard-body">
+        <div id="kb-list" class="kb-list"></div>
+        <form id="kb-form" class="kb-form">
+          <h3>Add knowledge</h3>
+          <label>Title <input type="text" id="kb-title" maxlength="140" required placeholder="e.g. Our delivery promise"></label>
+          <label>What the coaches should know <textarea id="kb-body" rows="6" maxlength="12000" required placeholder="Paste a playbook, a talk track, a policy, a case study…"></textarea></label>
+          <fieldset class="kb-for"><legend>Which coaches use it (none checked = all)</legend><div id="kb-personas"></div></fieldset>
+          <label class="check" id="kb-shared-wrap" hidden><input type="checkbox" id="kb-shared"> Share with the whole team</label>
+          <div class="row-buttons"><button type="submit" class="btn">Save to knowledge</button></div>
+          <p id="kb-status" class="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </div>
   </main>
 
   <div id="invoice-modal" class="modal-backdrop" hidden>
@@ -1009,6 +1101,48 @@
   <!-- Filled in and shown only when printing a proposal -->
   <div id="proposal-print" aria-hidden="true"></div>
 
+  <div id="acct-dialog" class="signin-backdrop" role="dialog" aria-modal="true" aria-labelledby="acct-title" hidden>
+    <div class="signin-card acct-card">
+      <h2 id="acct-title">Account &amp; privacy</h2>
+      <p>Signed in as <strong id="acct-email"></strong></p>
+      <ul class="acct-links">
+        <li><a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></li>
+        <li><a href="terms.html" target="_blank" rel="noopener">Terms of use</a></li>
+        <li><a href="support.html" target="_blank" rel="noopener">Help &amp; support</a></li>
+      </ul>
+      <label class="check acct-ai"><input type="checkbox" id="acct-ai"> <span>Allow AI features <small class="muted">(coaches, note tidy-up, business card reading). Sends that text or photo to Anthropic.</small></span></label>
+      <div class="row-buttons">
+        <button type="button" class="btn small" id="acct-export">Download my data (JSON)</button>
+        <button type="button" class="btn small" id="acct-clear">Clear this device</button>
+        <button type="button" class="btn small" id="acct-sample-remove" hidden>Remove sample data</button>
+      </div>
+      <h3>Delete my account</h3>
+      <p class="hint">Permanently deletes your sign-in and the accounts, leads, notes inbox and coach knowledge you own on the server, and clears this device. Download your data first if you need it. This can't be undone.</p>
+      <button type="button" class="btn small danger" id="acct-delete-start">Delete my account…</button>
+      <form id="acct-delete-form" hidden>
+        <label>Your password <input type="password" id="acct-delete-password" autocomplete="current-password" required></label>
+        <label>Type DELETE to confirm <input type="text" id="acct-delete-confirm" autocomplete="off" required></label>
+        <button type="submit" class="btn small danger" id="acct-delete-go">Permanently delete</button>
+        <p id="acct-delete-error" class="status err" aria-live="assertive"></p>
+      </form>
+      <div class="row-buttons"><button type="button" class="btn small" id="acct-close">Close</button></div>
+    </div>
+  </div>
+
+  <div id="ai-consent" class="signin-backdrop" role="dialog" aria-modal="true" aria-labelledby="ai-consent-title" hidden>
+    <div class="signin-card acct-card">
+      <h2 id="ai-consent-title">Allow AI features?</h2>
+      <p>Sales Hub can use AI (Claude, from Anthropic) to coach you, tidy dictated notes and read business cards.</p>
+      <ul>
+        <li><strong>What is sent:</strong> the question you ask a coach plus a short deal summary (company, segment, stage, city, headcount); the note you choose to tidy; or the business card photo you scan. Costs, margins and saved contacts are never sent.</li>
+        <li><strong>Why:</strong> only to write the answer or read the card for you. See Anthropic's privacy policy for how it handles data.</li>
+        <li><strong>Without it</strong> everything still works: coaches show your playbook, notes use simple rules, cards use OCR.</li>
+      </ul>
+      <p class="hint">Change this any time in Account. <a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
+      <div class="row-buttons"><button type="button" class="btn" id="ai-consent-yes">Allow AI features</button><button type="button" class="btn small" id="ai-consent-no">Not now</button></div>
+    </div>
+  </div>
+
   <div id="signin" class="signin-backdrop" role="dialog" aria-modal="true" aria-labelledby="signin-title" hidden>
     <form id="signin-form" class="signin-card">
       <span class="brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#a87a2a"/><path d="M8 21.5 L13.5 16 L17.5 19.5 L24 12" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.5 12 H24 V16.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="brand-name">Sales Hub</span></span>
@@ -1018,7 +1152,8 @@
       <label>Password <input type="password" id="signin-password" autocomplete="current-password" required></label>
       <button type="submit" class="btn blue">Sign in</button>
       <p id="signin-error" class="status err" aria-live="assertive"></p>
-      <p class="hint">Accounts are set up by your administrator on the server.</p>
+      <p class="hint">Accounts are set up by your administrator. Need access? Contact <a data-support-email>your administrator</a>.</p>
+      <p class="hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="terms.html" target="_blank" rel="noopener">Terms</a> · <a href="support.html" target="_blank" rel="noopener">Support</a></p>
     </form>
   </div>
 
@@ -1040,5 +1175,10 @@
   <script defer src="today.js"></script>
   <script defer src="map.js"></script>
   <script defer src="drawers.js"></script>
+  <script defer src="sample.js"></script>
+  <script defer src="finder.js"></script>
+  <script defer src="coach.js"></script>
+  <script defer src="account.js"></script>
+  <script defer src="native.js"></script>
 </body>
 </html>

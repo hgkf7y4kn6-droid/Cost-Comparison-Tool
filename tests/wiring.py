@@ -10,7 +10,8 @@ from unittest.mock import MagicMock
 
 PROJECT_MODULES = ("backend", "deps", "config", "extraction", "engine", "excel_style", "comparison", "analysis",
                    "routes_auth", "routes_records", "routes_catalog", "routes_compare",
-                   "routes_analysis", "routes_leads", "routes_notes", "notes", "routes_cards", "cards")
+                   "routes_analysis", "routes_leads", "routes_notes", "notes", "routes_cards", "cards",
+                   "routes_finder", "prospect_finder", "routes_coach", "personas")
 
 
 class _Routes:

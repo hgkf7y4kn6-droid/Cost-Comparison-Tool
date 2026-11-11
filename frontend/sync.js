@@ -132,7 +132,8 @@
 
   async function pushKind(kind) {
     const known = synced[kind];
-    const changed = state[kind].map((r) => [r, comparable(r)]).filter(([r, json]) => known[r.id] !== json);
+    // Sample records (Today -> Try it with sample data) stay on this device; they are never shared with the team.
+    const changed = state[kind].filter((r) => !r.sample).map((r) => [r, comparable(r)]).filter(([r, json]) => known[r.id] !== json);
     let note = "";
     let updatedFromServer = false;
     for (let i = 0; i < changed.length; i += BULK_CHUNK) {

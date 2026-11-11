@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Terms of use · Sales Hub</title>
+  <meta name="description" content="The rules for using Sales Hub.">
+  <meta name="theme-color" content="#0f1a2c">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .legal { max-width: 760px; margin: 0 auto; padding: 1.4em 20px 4em; }
+    .legal h1 { font: 400 2em/1.15 var(--font-display); margin: 0.2em 0 0.1em; }
+    .legal h2 { font: 400 1.35em/1.25 var(--font-display); margin: 1.6em 0 0.4em; }
+    .legal p, .legal li { line-height: 1.65; }
+    .legal table { margin: 0.8em 0; }
+    .legal .updated { color: var(--muted); font-size: 0.9em; }
+    .legal-nav { display: flex; gap: 1.2em; flex-wrap: wrap; padding: 0.8em 20px; background: var(--ink); }
+    .legal-nav a { color: var(--on-ink); font-weight: 600; text-decoration: none; }
+    .legal-nav a[aria-current] { color: #e2bd6e; }
+  </style>
+</head>
+<body>
+  <nav class="legal-nav" aria-label="Sales Hub"><a href="./">← Sales Hub</a><a href="privacy.html">Privacy</a><a href="terms.html" aria-current="page">Terms</a><a href="support.html">Support</a></nav>
+  <main class="legal" id="main">
+
+    <h1>Terms of use</h1>
+    <p class="updated">Last updated: November 11, 2026</p>
+    <p>These terms apply when you use Sales Hub, provided by <span data-company>Office Basics</span> to its sales team. By signing in you agree to them. If you use the app for an employer, your employer's policies also apply.</p>
+
+    <h2>Your account</h2>
+    <p>Accounts are issued by your administrator. Keep your password private, use a strong one, and don't share your account. You are responsible for activity under it. Tell your administrator at once if you think someone else has access.</p>
+
+    <h2>Acceptable use</h2>
+    <ul>
+      <li>Use the app only for legitimate business sales activity.</li>
+      <li>Follow the law on outreach (CAN-SPAM, TCPA and state rules): email business contacts only, identify yourself, include an opt-out line, and honor opt-outs.</li>
+      <li>Get consent where the law requires it before recording calls; Pennsylvania and some other states require every party's consent.</li>
+      <li>Don't upload data you aren't allowed to use, attempt to break or probe the service, scrape it, or use it to harass anyone.</li>
+      <li>Follow the terms of the services the app connects to, including Google Maps Platform and Apollo.</li>
+    </ul>
+
+    <h2>Your content</h2>
+    <p>The leads, quotes, notes and other content you enter remain yours (or your employer's). You give us permission to store and process it to run the app. Proposals and prices are your responsibility: check them before you send them to a customer.</p>
+
+    <h2>AI features</h2>
+    <p>Coaches, note tidy-up and card reading may use AI. They can be wrong. They give guidance, not legal, tax or financial advice, and you are responsible for what you send or sign. Don't rely on them for anything you haven't checked.</p>
+
+    <h2>Third-party data</h2>
+    <p>Business information from Google and Apollo is provided as is. Headcounts are estimates. Google's terms limit how long place data may be stored; the app keeps Google's place ID and the details you choose to save.</p>
+
+    <h2>Availability and changes</h2>
+    <p>We work to keep the service running but don't promise it will always be available or error-free. We may change or end features. You can stop using the app and delete your account at any time (<em>Account → Delete my account</em>).</p>
+
+    <h2>Liability</h2>
+    <p>To the extent the law allows, the service is provided “as is”, and we are not liable for indirect or consequential losses, lost profits or lost data. Nothing here limits liability that can't be limited by law.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about these terms: <a data-support-email>your administrator</a>.</p>
+
+  </main>
+  <script src="config.js"></script>
+  <script>
+    (function () {
+      var c = window.COMPANY || {};
+      document.querySelectorAll("[data-company]").forEach(function (e) { e.textContent = c.name || "Office Basics"; });
+      document.querySelectorAll("[data-support-email]").forEach(function (a) {
+        if (c.supportEmail) { a.href = "mailto:" + c.supportEmail; a.textContent = c.supportEmail; }
+        else { a.removeAttribute("href"); a.textContent = "your administrator"; }
+      });
+      document.querySelectorAll("[data-address]").forEach(function (e) { if (c.mailingAddress) e.textContent = c.mailingAddress; else e.hidden = true; });
+    })();
+  </script>
+</body>
+</html>

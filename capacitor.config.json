@@ -1,0 +1,19 @@
+{
+  "appId": "com.officebasics.saleshub",
+  "appName": "Sales Hub",
+  "webDir": "frontend",
+  "backgroundColor": "#0f1a2c",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https",
+    "hostname": "localhost"
+  },
+  "ios": {
+    "contentInset": "always",
+    "scheme": "Sales Hub"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}

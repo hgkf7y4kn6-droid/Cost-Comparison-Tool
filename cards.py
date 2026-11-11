@@ -239,17 +239,17 @@ def _ocr(jpeg: bytes) -> Optional[str]:
         return None
 
 
-def scan_card(content: bytes) -> Dict[str, Any]:
+def scan_card(content: bytes, allow_ai: bool = True) -> Dict[str, Any]:
     """{fields, source: "ai" | "ocr"}. Raises ValueError for a bad photo, RuntimeError if no reader works."""
     jpeg = prepare_image(content)
-    if ai_available():
+    if allow_ai and ai_available():
         try:
             return {"fields": coerce_fields(_call_vision(jpeg)), "source": "ai"}
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError, OSError):
             pass  # fall through to OCR
     text = _ocr(jpeg)
     if text is None:
-        raise RuntimeError("Card reading isn't set up on the server (no ANTHROPIC_API_KEY and no OCR). You can type the details instead.")
+        raise RuntimeError("Card reading isn't available: AI reading is off for you (or not set up) and the server has no OCR. You can type the details instead.")
     if not text.strip():
         raise ValueError("Couldn't find any text on that photo. Retake it flat, well lit, filling the frame.")
     return {"fields": coerce_fields(parse_card_text(text)), "source": "ocr"}

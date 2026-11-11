@@ -69,3 +69,17 @@ def test_roles_and_fail_closed():
     assert a.role("ana@x.com") == "manager" and a.role("raj@x.com") == "rep"
     assert a.configured
     assert not auth.Authenticator({}, "s").configured
+
+
+def test_deactivated_user_cannot_sign_in_or_use_tokens(tmp_path):
+    path = str(tmp_path / "deactivated.json")
+    a = auth.Authenticator({"ana@x.com": H}, "secret", None, path)
+    token, _ = a.issue_token("ana@x.com")
+    key = a.integration_key("ana@x.com")
+    assert a.verify_token(token) and a.verify_integration_key(key)
+    a.deactivate("Ana@X.com")
+    assert a.verify_token(token) is None and a.verify_integration_key(key) is None
+    assert a.login("ana@x.com", "correct horse battery", "1.1.1.1") is None
+    # survives a restart
+    again = auth.Authenticator({"ana@x.com": H}, "secret", None, path)
+    assert again.login("ana@x.com", "correct horse battery", "1.1.1.1") is None

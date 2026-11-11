@@ -37,6 +37,18 @@ services:
       # falls back to Tesseract OCR. CARD_AI_MODEL overrides the vision model.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Customer finder (Prospecting -> Find customers). Keys stay on the server.
+      # GOOGLE_PLACES_API_KEY: a Google Cloud key with Places API (New) enabled, restricted
+      # to this server's outbound IPs or left unrestricted by referrer (it is never sent to browsers).
+      # APOLLO_API_KEY: an Apollo API key (organization search, organization enrich, people search).
+      # FINDER_DAILY_CALLS caps lookups per rep per day (default 150) to bound Google/Apollo spend.
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: APOLLO_API_KEY
+        sync: false
+      - key: FINDER_DAILY_CALLS
+        value: "150"
+      # AI personas (Coach tab) use ANTHROPIC_API_KEY too. COACH_AI_MODEL overrides the model.
     disk:
       name: ob-data
       mountPath: /var/data

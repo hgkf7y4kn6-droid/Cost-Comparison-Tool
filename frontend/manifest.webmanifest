@@ -1,0 +1,22 @@
+{
+  "name": "Sales Hub",
+  "short_name": "Sales Hub",
+  "description": "Find customers, compare costs, build proposals and grow accounts for Office Basics reps.",
+  "id": "/",
+  "start_url": "/#today",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1a2c",
+  "theme_color": "#0f1a2c",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Find customers", "url": "/#prospecting", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Coach", "url": "/#coach", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

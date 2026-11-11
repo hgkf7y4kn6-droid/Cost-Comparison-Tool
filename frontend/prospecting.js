@@ -1108,6 +1108,19 @@
     save();
     return lead;
   };
+  // Adds many leads with one save; skips ones already in the pipeline. Returns the leads it added.
+  hub.addLeads = (list) => {
+    const now = new Date().toISOString();
+    const added = [];
+    for (const fields of list) {
+      if (hub.findLead(fields)) continue;
+      const lead = normalizeLead({ id: newId(), created: now, updated: now, ...fields });
+      state.leads.push(lead);
+      added.push(lead);
+    }
+    if (added.length) save();
+    return added;
+  };
   hub.currentLeadId = () => openId;
   hub.openLead = (id) => {
     window.showTab("prospecting");

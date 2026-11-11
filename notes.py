@@ -188,13 +188,13 @@ def coerce_ai_result(data: Any, original: str, today: date) -> Dict[str, Any]:
     }
 
 
-def structure_note(text: str, context: str = "", today: Optional[date] = None) -> Dict[str, Any]:
+def structure_note(text: str, context: str = "", today: Optional[date] = None, allow_ai: bool = True) -> Dict[str, Any]:
     """Clean up a raw note. Uses AI when configured; any failure falls back to the rules."""
     today = today or datetime.now(timezone.utc).date()
     text = (text or "").strip()[:MAX_NOTE_CHARS]
     if not text:
         raise ValueError("Add some notes first.")
-    if ai_available():
+    if allow_ai and ai_available():
         try:
             return coerce_ai_result(_call_anthropic(text, today, _clean(context, 120)), text, today)
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError, OSError):
@@ -234,6 +234,12 @@ class NoteInbox:
                 "SELECT id, created_at, data FROM note_inbox WHERE owner = ? ORDER BY created_at", (owner,)
             ).fetchall()
         return [{**json.loads(data), "id": item_id, "received": created} for item_id, created, data in rows]
+
+    def erase_user(self, owner: str) -> int:
+        with self.lock:
+            cur = self.db.execute("DELETE FROM note_inbox WHERE owner = ?", (owner,))
+            self.db.commit()
+        return cur.rowcount
 
     def remove(self, owner: str, item_id: str) -> bool:
         with self.lock:

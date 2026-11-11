@@ -14,7 +14,9 @@
      "*"
     ],
     "allow_origins": [
-     "https://example.test"
+     "https://example.test",
+     "https://localhost",
+     "capacitor://localhost"
     ]
    }
   ],
@@ -44,6 +46,11 @@
  "routes": [
   [
    "DELETE",
+   "/coach/knowledge/{entry_id}",
+   "delete_knowledge"
+  ],
+  [
+   "DELETE",
    "/notes/inbox/{item_id}",
    "remove_from_inbox"
   ],
@@ -69,8 +76,23 @@
   ],
   [
    "GET",
+   "/coach/knowledge",
+   "list_knowledge"
+  ],
+  [
+   "GET",
+   "/coach/personas",
+   "list_personas"
+  ],
+  [
+   "GET",
    "/feedback/list/",
    "list_feedback"
+  ],
+  [
+   "GET",
+   "/finder/status",
+   "finder_status"
   ],
   [
    "GET",
@@ -99,6 +121,11 @@
   ],
   [
    "POST",
+   "/auth/delete-account",
+   "delete_account"
+  ],
+  [
+   "POST",
    "/auth/login",
    "login"
   ],
@@ -114,6 +141,16 @@
   ],
   [
    "POST",
+   "/coach/ask",
+   "ask"
+  ],
+  [
+   "POST",
+   "/coach/knowledge",
+   "add_knowledge"
+  ],
+  [
+   "POST",
    "/compare/",
    "compare_product"
   ],
@@ -126,6 +163,16 @@
    "POST",
    "/feedback/confirm/",
    "confirm_feedback"
+  ],
+  [
+   "POST",
+   "/finder/enrich",
+   "finder_enrich"
+  ],
+  [
+   "POST",
+   "/finder/search",
+   "finder_search"
   ],
   [
    "POST",

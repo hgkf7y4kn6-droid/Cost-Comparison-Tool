@@ -13,7 +13,9 @@ import routes_analysis
 import routes_auth
 import routes_cards
 import routes_catalog
+import routes_coach
 import routes_compare
+import routes_finder
 import routes_leads
 import routes_notes
 import routes_records
@@ -69,6 +71,10 @@ async def require_sign_in(request: Request, call_next):
 # "https://cost-comparison-tool.example.workers.dev". Unset means same-origin
 # only; "*" allows any origin.
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+# The iOS and Android apps load the web app from https://localhost inside the app (Capacitor), and call
+# this server from there. Sign-in is a bearer token, not a cookie, so allowing that origin adds no risk.
+NATIVE_APP_ORIGINS = ["https://localhost", "capacitor://localhost"]
+ALLOWED_ORIGINS += [o for o in NATIVE_APP_ORIGINS if o not in ALLOWED_ORIGINS]
 if "*" in ALLOWED_ORIGINS:
     print("WARNING: ALLOWED_ORIGINS is '*'; set it to your frontend URL(s) before real customer data.", file=sys.stderr)
 app.add_middleware(
@@ -105,7 +111,8 @@ async def web_headers(request: Request, call_next):
         h.setdefault("Cache-Control", "no-cache")
     return response
 
-for _routes in (routes_auth, routes_records, routes_cards, routes_catalog, routes_leads, routes_notes, routes_compare, routes_analysis):
+for _routes in (routes_auth, routes_records, routes_cards, routes_catalog, routes_leads, routes_notes, routes_finder, routes_coach,
+               routes_compare, routes_analysis):
     app.include_router(_routes.router)
 
 
