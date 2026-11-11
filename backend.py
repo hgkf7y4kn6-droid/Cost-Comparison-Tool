@@ -18,6 +18,7 @@ import routes_compare
 import routes_finder
 import routes_leads
 import routes_notes
+import routes_persona
 import routes_records
 from config import REPORTS_DIR
 from deps import authenticator
@@ -111,7 +112,7 @@ async def web_headers(request: Request, call_next):
         h.setdefault("Cache-Control", "no-cache")
     return response
 
-for _routes in (routes_auth, routes_records, routes_cards, routes_catalog, routes_leads, routes_notes, routes_finder, routes_coach,
+for _routes in (routes_auth, routes_records, routes_cards, routes_catalog, routes_leads, routes_notes, routes_persona, routes_finder, routes_coach,
                routes_compare, routes_analysis):
     app.include_router(_routes.router)
 

@@ -247,6 +247,28 @@ rep's own entries, and entries a manager shares with the team (add them in *Coac
 - API: `GET /coach/personas`, `POST /coach/ask`, `GET|POST /coach/knowledge`, `DELETE /coach/knowledge/{id}`.
   Entries live in `$DATA_DIR/coach.db`.
 
+## Buyer style (persona inference for outreach)
+Each lead's detail panel has a **Buyer style** card (`buyer_persona.py`, `routes_persona.py`, `frontend/buyerstyle.js`). It infers
+how the person likes to be approached and drafts outreach to match.
+
+| Buyer reads as | Style | Draft |
+|---|---|---|
+| Impatient / urgent | Efficient Concierge | 80 words or fewer, the point first, one ask |
+| Methodical / detail-oriented | Analytical Specialist | precise; offers a written line-item comparison, item numbers and spec sheets |
+| Frustrated / emotional | Empathic Problem-Solver | acknowledges first, no pitch, effortless opt-out |
+| Novice / unsure | Proactive Advisor | plain language, one idea, offers a walkthrough |
+| Unclear | Neutral Professional | the standard draft |
+
+- **Evidence**, weighted: replies logged as *email* (3), the rep's notes, touches and CRM/note-taker imports once filed (2),
+  and web research pasted into the card (1). Signals older than 90 days count half.
+- **Rules only**: no model call and no cost. The card shows the exact quotes behind the answer.
+- **Honest by design**: thin or conflicting evidence gives "unknown" and the neutral draft; web evidence alone is never
+  "established"; frustration in an email or note beats every other cue; text that looks like instructions to an AI is ignored.
+- **Safeguards**: every styled draft keeps the opt-out line, never mentions the inference, and is never longer than the neutral
+  draft; a draft that fails these checks falls back to neutral. The rep reads and sends it themselves.
+- **Coach**: with *Use the current deal for context* on, the coaches (especially Outreach Writer) also get a one-line style note.
+- Nothing is stored server-side: the app sends the signals it already holds. API: `POST /persona/infer`, `POST /persona/draft`.
+
 ## Privacy, AI consent and account deletion
 - **AI consent.** Coaches, "Tidy with AI" and AI card reading send the rep's text or photo to Anthropic. The app asks
   once (and in *Account*) and sends an `X-AI-Consent: granted` header only after a yes; the server uses its non-AI

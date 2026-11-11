@@ -876,3 +876,8 @@ main:focus { outline: none; }
   .finder-table th:nth-child(5), .finder-table td:nth-child(5) { display: none; }
   .finder-table td, .finder-table th { padding-left: 0.5em; padding-right: 0.5em; }
 }
+
+/* ---------- Buyer style ---------- */
+.bs-result { margin: 0 0 0.4em; }
+.bs-evidence { list-style: none; margin: 0 0 0.8em; padding: 0; display: flex; flex-direction: column; gap: 0.35em; font-size: 0.88em; }
+.bs-evidence:empty { display: none; }

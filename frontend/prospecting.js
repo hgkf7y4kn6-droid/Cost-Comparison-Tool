@@ -956,6 +956,7 @@
     return w;
   }
 
+  let lastOutreach = null; // the pieces of the draft on screen, so a style-matched draft can reuse them
   function draftEmail(d) {
     const first = (d.contactName || "").split(/\s+/)[0];
     // Lead with the product line the contact's title owns, and keep the pitch to two lines.
@@ -985,6 +986,7 @@
       ? `${d.company}'s new space in ${place}`
       : `${pitches[0][0].toUpperCase() + pitches[0].slice(1)} costs for ${d.company}`;
 
+    lastOutreach = { first, company: d.company, pitch: pitchText, hook };
     return [
       `Subject: ${subject}`,
       "",
@@ -1128,6 +1130,7 @@
     return added;
   };
   hub.currentLeadId = () => openId;
+  hub.outreachParts = () => lastOutreach;
   hub.openLead = (id) => {
     window.showTab("prospecting");
     openLead(id);

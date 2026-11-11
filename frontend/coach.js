@@ -48,12 +48,22 @@
     return out.map((x) => (Array.isArray(x) ? `<ul>${x.join("")}</ul>` : x)).join("");
   }
 
-  function dealContext() {
+  async function dealContext() {
     if (!$("coach-use-deal").checked || !hub.deal) return null;
     const r = hub.deal.resolve();
     if (!r) return null;
     const src = r.lead || r.acct;
+    // How this buyer likes to be approached, from the rep's own notes (see buyerstyle.js).
+    let buyerPersona = "";
+    if (r.lead && hub.buyerStyle) {
+      try {
+        buyerPersona = (await hub.buyerStyle.infer(r.lead)).persona;
+      } catch (_) {
+        // offline: the coach still works without it
+      }
+    }
     return {
+      buyerPersona,
       company: r.company, segment: src.segment || "", stage: (r.lead && r.lead.stage) || (r.acct && r.acct.status) || "",
       city: src.city || "", state: src.state || "", employees: src.employees || "", products: src.products || [],
       next: r.open ? `proposal ${r.open.status}` : "",
@@ -125,7 +135,7 @@
     $("coach-q").value = "";
     const pending = addMessage("assistant", "<p class='muted'>Thinking…</p>", "pending");
     try {
-      const data = await call("/coach/ask", "POST", { persona: current.id, question: q, history, deal: dealContext() });
+      const data = await call("/coach/ask", "POST", { persona: current.id, question: q, history, deal: await dealContext() });
       history.push({ role: "user", text: q }, { role: "assistant", text: data.answer });
       pending.classList.remove("pending");
       pending.innerHTML =

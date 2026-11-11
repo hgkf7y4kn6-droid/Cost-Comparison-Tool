@@ -191,6 +191,16 @@
   ],
   [
    "POST",
+   "/persona/draft",
+   "draft"
+  ],
+  [
+   "POST",
+   "/persona/infer",
+   "infer"
+  ],
+  [
+   "POST",
    "/records/{kind}/bulk",
    "save_records"
   ],

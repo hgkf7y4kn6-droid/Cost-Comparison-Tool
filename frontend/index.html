@@ -363,6 +363,24 @@
         </div>
       </div>
 
+      <div class="xcard" data-card="lead-style">
+        <div class="xcard-head">
+          <div class="xcard-titles"><h3>Buyer style</h3><p class="xcard-sub">How this person likes to be approached, from their replies, your notes and web research.</p></div>
+          <span class="xcard-aside" id="bs-aside"></span>
+        </div>
+        <div class="xcard-body">
+          <p id="bs-result" class="bs-result"></p>
+          <ul id="bs-evidence" class="bs-evidence"></ul>
+          <label>Web research <small class="muted">(paste what you found about them; one point per line)</small>
+            <textarea id="bs-research" rows="3" maxlength="2000" placeholder="e.g. Company site says they publish a procurement policy and require itemized quotes."></textarea></label>
+          <div class="row-buttons">
+            <button type="button" class="btn small primary" id="bs-draft">Draft in this style</button>
+          </div>
+          <p id="bs-status" class="hint" aria-live="polite"></p>
+          <p class="hint">Inferred from your own records by simple rules, never shown to the customer. Email replies count most, then your notes, then web research. Replies you log as “email” count as email.</p>
+        </div>
+      </div>
+
       <div class="xcard" data-card="lead-outreach">
         <div class="xcard-head">
           <div class="xcard-titles"><h3>Outreach draft</h3><p class="xcard-sub">Personalized to the lead's local footprint and product interest. Always keep the opt-out line.</p></div>
@@ -1176,6 +1194,7 @@
   <script defer src="map.js"></script>
   <script defer src="drawers.js"></script>
   <script defer src="sample.js"></script>
+  <script defer src="buyerstyle.js"></script>
   <script defer src="finder.js"></script>
   <script defer src="coach.js"></script>
   <script defer src="account.js"></script>
