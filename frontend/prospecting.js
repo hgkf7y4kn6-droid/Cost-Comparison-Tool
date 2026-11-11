@@ -996,7 +996,7 @@
       "",
       `Office Basics helps local teams lower their ${pitchText} costs. We normally start with a free good/better/best cost comparison against what you buy today — often the savings come from switching formats rather than just price.`,
       "",
-      `Would a 15-minute call next week make sense?`,
+      `Worth a quick look? I can send the comparison first, no call needed.`,
       "",
       "Best,",
       "[Your name] · Office Basics · [Business mailing address]",

@@ -180,6 +180,19 @@ What signals influence your perception of a business before you buy from them?""
              "renovations and timelines. Branded products: marketing, communications and events people; ask what events, giveaways and "
              "customer gifts are coming. Purchased uniforms: owners, operations or general managers and HR; ask who is uniformed, how "
              "often they reorder, and what they pay per employee. Open each conversation with the buyer's own problem."},
+    {"id": "cold-email-playbook", "title": "Cold email: what gets replies", "personas": ["outreach", "discovery"],
+     "tags": ["cold", "email", "outreach", "subject", "follow-up", "reply", "short", "cta", "mobile", "first email", "voicemail"],
+     "body": "Target tightly: a small, relevant list beats a big generic one. Keep the email under 100 words (75 is better) so it reads "
+             "at a glance on a phone, in short paragraphs, plain text, no logos or banner images and at most one link. Subject: two to "
+             "four plain words, like a coworker wrote it (for example the company name, or quick question); no clickbait or emojis. "
+             "Open with why you are writing to this person now (something you can actually observe: a new location, a move, a hire), not "
+             "with who you are, and never with fake flattery. Name the headache that trigger usually causes for their role, and mention "
+             "one relatable result for a similar customer only if it's true. End with a low-friction question (“Worth a quick look?”) or "
+             "offer to send something free first (a cost-per-use comparison) instead of asking for 30 minutes. Follow up once or twice, "
+             "three to four business days apart, in the same thread, each time with something new (a tip, a number, a different angle), "
+             "never “just bumping this”. Track opens, replies and which wording works, and change one thing at a time. Include a real "
+             "sender, a physical address and an opt-out line (CAN-SPAM). If you ever send in volume, use a separate, warmed-up sending "
+             "domain so a campaign can't damage the company's main domain."},
     {"id": "onboarding-growth", "title": "Onboard, then grow the account", "personas": ["growth"],
      "tags": ["onboarding", "account", "growth", "cross-sell", "review", "qbr", "renewal", "expand", "90 day"],
      "body": "A won account starts with onboarding: kickoff, account setup, contacts, contract pricing, delivery and "

@@ -65,7 +65,7 @@ PERSONAS = {
 STYLES: Dict[str, Dict[str, Any]] = {
     "impatient": {"id": "concierge", "name": "Efficient Concierge", "max_words": 80,
                   "guidance": "Efficient Concierge: 80 words or fewer, lead with the point, make one ask, no filler."},
-    "methodical": {"id": "specialist", "name": "Analytical Specialist", "max_words": 130,
+    "methodical": {"id": "specialist", "name": "Analytical Specialist", "max_words": 100,
                    "guidance": "Analytical Specialist: precise and specific; offer a written line-item comparison, "
                                "item numbers and spec sheets so they can verify each point."},
     "frustrated": {"id": "empathic", "name": "Empathic Problem-Solver", "max_words": 90,
@@ -73,7 +73,7 @@ STYLES: Dict[str, Dict[str, Any]] = {
                                "went wrong, and make opting out effortless."},
     "novice": {"id": "advisor", "name": "Proactive Advisor", "max_words": 100,
                "guidance": "Proactive Advisor: plain language, one idea, no jargon, offer a short walkthrough."},
-    "unknown": {"id": "neutral", "name": "Neutral Professional", "max_words": 140,
+    "unknown": {"id": "neutral", "name": "Neutral Professional", "max_words": 100,
                 "guidance": "Neutral Professional: friendly, brief, one clear ask."},
 }
 OPT_OUT_LINE = 'If this isn\'t for you, just let me know, or reply "unsubscribe" and I won\'t contact you again.'
@@ -190,7 +190,7 @@ def draft_email(base: Dict[str, Any], persona: str, signature: str = "") -> Dict
         subject = f"{pitch[0].upper() + pitch[1:]} costs for {company}"
         body = [f"Hi {first},", (hook + " " if hook else "") + f"Office Basics helps local teams lower their {pitch} costs. "
                 "We start with a free good/better/best cost comparison against what you buy today.",
-                "Would a 15-minute call next week make sense?"]
+                "Worth a quick look? I can send the comparison first, no call needed."]
     text = "\n\n".join(body + ["Best,\n" + sig, OPT_OUT_LINE])
     return {"subject": subject, "body": text}
 
